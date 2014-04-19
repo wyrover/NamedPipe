@@ -66,7 +66,7 @@ private:
 
     TCHAR m_sNamedPipe[MAX_PATH];
 
-    CRITICAL_SECTION m_csReadIng;
+    CRITICAL_SECTION m_csConnnectorMap;
 
     ConnectorMap m_connectorMap;
 
@@ -76,7 +76,7 @@ private:
 class CNamedPipeConnector : public IIPCConnector
 {
 public:
-    CNamedPipeConnector(HANDLE hPipe, IIPCObject* pServer, IIPCEvent* pEvent);
+    CNamedPipeConnector(PCLIENT pClient, IIPCObject* pServer, IIPCEvent* pEvent);
 
     virtual ~CNamedPipeConnector();
 
@@ -86,13 +86,13 @@ public:
 
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
+    virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize);
+
 private:
-    HANDLE m_hPipe;
+    PCLIENT m_pClient;
 
     IIPCObject* m_pServer;
 
     IIPCEvent* m_pEventSensor;
-
-    OVERLAPPED m_ovPostMessage;
 };
 

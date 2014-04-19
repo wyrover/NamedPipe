@@ -27,6 +27,7 @@ typedef struct _CLIENT : OVERLAPPED
     NAMEDPIPE_STATUS            emPipeStatus;
     PVOID           Zero;
     SYELOG_MESSAGE  Message;
+
 } CLIENT, *PCLIENT;
 
 #define pure_virtual __declspec(novtable)
@@ -37,6 +38,7 @@ struct pure_virtual IIPCConnector
     virtual HANDLE GetHandle() = 0;
     virtual BOOL SendMessage(LPCVOID lpBuf, DWORD dwBufSize) = 0;
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize) = 0;
+    virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize) = 0;
 };
 
 struct pure_virtual IIPCConnectorIterator

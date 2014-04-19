@@ -52,19 +52,25 @@ public:
         memcpy_s(sBuf, MAX_PATH, lpBuf, MAX_PATH);
         _tprintf_s(_T("%s"), sBuf);
 
-//		TCHAR* sReply = _T("Hello,Client\r\n");
-        IIPCConnectorIterator* pClientIterator = pServer->GetClients();
+		pClient->SendMessage(lpBuf, dwBufSize);
 
-        for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
-        {
-            IIPCConnector* aClient = pClientIterator->GetCurrent();
-
-            if(NULL == aClient)
-                continue;
-
-            if (!aClient->SendMessage(sBuf, _tcslen((TCHAR*)sBuf)*sizeof(TCHAR)))
-				break;
-        }
+//         IIPCConnectorIterator* pClientIterator = pServer->GetClients();
+// 
+//         for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
+//         {
+//             IIPCConnector* aClient = pClientIterator->GetCurrent();
+// 
+//             if(NULL == aClient)
+//                 continue;
+// 
+//             if(!aClient->PostMessage(sBuf, _tcslen((TCHAR*)sBuf)*sizeof(TCHAR)))
+//                 break;
+// 
+//             TCHAR sReply[MAX_PATH] = {0};
+//             DWORD dwReplySize = 0;
+//             aClient->RequestAndReply(sBuf, _tcslen((TCHAR*)sBuf)*sizeof(TCHAR), sReply, MAX_PATH, &dwReplySize);
+//             Sleep(5);
+//         }
     }
 
     virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize)

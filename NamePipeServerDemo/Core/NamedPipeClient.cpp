@@ -4,7 +4,6 @@
 
 CNamedPipeClient::CNamedPipeClient(IIPCEvent* pEvent): m_pEventSensor(pEvent)
     , m_hPipe(INVALID_HANDLE_VALUE)
-    , m_hSendThread(NULL)
     , m_hRecvThread(NULL)
 {
 
@@ -153,25 +152,30 @@ DWORD __stdcall CNamedPipeClient::_RecvThreadProc(LPVOID lpParam)
 
 DWORD CNamedPipeClient::_RecvThread()
 {
-    DWORD dwReaded = 0;
     TCHAR sBuf[SYELOG_MAXIMUM_MESSAGE] = {0};
 
     while(TRUE)
     {
+        DWORD dwReaded = 0;
+        HANDLE hEvent = m_ovRead.hEvent;
+        ZeroMemory(&m_ovRead, sizeof(OVERLAPPED));
+        m_ovRead.hEvent = hEvent;
+
         if(!ReadFile(m_hPipe, sBuf, SYELOG_MAXIMUM_MESSAGE, &dwReaded, &m_ovRead))
         {
             if(GetLastError() == ERROR_IO_PENDING)
             {
-                if(!GetOverlappedResult(m_hPipe, &m_ovRead, &dwReaded, TRUE))
+                if(!GetOverlappedResult(m_hPipe, &m_ovRead, &dwReaded, INFINITE))
                     break;
                 else
                 {
                     OnRecv(this, this, sBuf, dwReaded);
-                    continue;
                 }
             }
             else if(GetLastError() == ERROR_BROKEN_PIPE)
+            {
                 break;
+            }
         }
         else
             OnRecv(this, this, sBuf, dwReaded);
@@ -208,8 +212,10 @@ BOOL CNamedPipeClient::PostMessage(LPCVOID lpBuf, DWORD dwBufSize)
         m_pEventSensor->OnSend(this, this, (LPVOID)lpBuf, dwBufSize);
 
     DWORD dwWrited = 0;
+    HANDLE hEvent = m_ovWrite.hEvent;
+    ZeroMemory(&m_ovWrite, sizeof(OVERLAPPED));
+    m_ovWrite.hEvent = hEvent;
     BOOL bSucess =::WriteFile(m_hPipe, lpBuf, dwBufSize, &dwWrited, &m_ovWrite);
-
     return ((bSucess) || (GetLastError() == ERROR_IO_PENDING));
 }
 
@@ -236,4 +242,27 @@ void CNamedPipeClient::Next()
 IIPCConnector* CNamedPipeClient::GetCurrent()
 {
     return this;
+}
+
+BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize)
+{
+    OVERLAPPED ov = {0};
+    ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    BOOL bSucess = TransactNamedPipe(m_hPipe, lpSendBuf, dwSendBufSize, lpReplyBuf, dwReplyBufSize, dwTransactSize, &ov);
+
+    if(!bSucess)
+    {
+        if(GetLastError() == ERROR_IO_PENDING)
+        {
+            if(WAIT_OBJECT_0 == WaitForSingleObject(ov.hEvent, INFINITE))
+            {
+                *dwTransactSize = ov.InternalHigh;
+                CloseHandle(ov.hEvent);
+                return TRUE;
+            }
+        }
+    }
+
+    CloseHandle(ov.hEvent);
+    return FALSE;
 }

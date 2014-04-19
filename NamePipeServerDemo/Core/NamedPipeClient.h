@@ -40,6 +40,8 @@ public:
 
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
+    virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize);
+
     virtual void Begin();
 
     virtual BOOL End();
@@ -57,8 +59,6 @@ protected:
 private:
     HANDLE m_hRecvThread ;
 
-    HANDLE m_hSendThread;
-
     IIPCEvent* m_pEventSensor;
 
     HANDLE m_hPipe;
@@ -68,5 +68,7 @@ private:
     OVERLAPPED m_ovRead;
 
     OVERLAPPED m_ovWrite;
+
+
 };
 

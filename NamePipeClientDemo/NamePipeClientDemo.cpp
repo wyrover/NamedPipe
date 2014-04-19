@@ -50,11 +50,12 @@ public:
 
 //        TCHAR* sReply = _T("Hello,Server\r\n");
 
-		static int x=0;
-		TCHAR aBuf[MAX_PATH]={0};
-		_stprintf_s(aBuf,_T("客户端 %d 发来数据 %d \r\n"),GetCurrentProcessId(),x++);
-        if (!pClient->SendMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
-			return ;
+        static int x = 0;
+        TCHAR aBuf[MAX_PATH] = {0};
+        _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
+
+        if(!pClient->SendMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
+            return ;
     }
 
     virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize)
@@ -65,28 +66,28 @@ public:
 
 DWORD __stdcall SendThread(LPVOID lpParam)
 {
-	IIPCObject* pServer = (IIPCObject*)lpParam;
+    IIPCObject* pServer = (IIPCObject*)lpParam;
 
-	IIPCConnectorIterator* pClientIterator = pServer->GetClients();
+    IIPCConnectorIterator* pClientIterator = pServer->GetClients();
 
-	while(FALSE == g_bExit)
-	{
-		for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
-		{
-			IIPCConnector* aClient = pClientIterator->GetCurrent();
+    while(FALSE == g_bExit)
+    {
+        for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
+        {
+            IIPCConnector* aClient = pClientIterator->GetCurrent();
 
-			if(NULL == aClient)
-				continue;
+            if(NULL == aClient)
+                continue;
 
-			TCHAR* sReply = _T("Hello,Server\r\n");
-			aClient->SendMessage(sReply, _tcslen(sReply)*sizeof(TCHAR));
-		}
+            TCHAR* sReply = _T("Hello,Server\r\n");
+            aClient->SendMessage(sReply, _tcslen(sReply)*sizeof(TCHAR));
+        }
 
-//		Sleep(10);
-//		g_bExit=TRUE;
-	}
+        Sleep(10);
+        g_bExit = TRUE;
+    }
 
-	return 0;
+    return 0;
 }
 
 DWORD __stdcall PostThread(LPVOID lpParam)
@@ -104,15 +105,55 @@ DWORD __stdcall PostThread(LPVOID lpParam)
             if(NULL == aClient)
                 continue;
 
-            TCHAR* sReply = _T("Hello,Server\r\n");
-            aClient->PostMessage(sReply, _tcslen(sReply)*sizeof(TCHAR));
+            TCHAR* sRequest = _T("Hello,Server\r\n");
+            DWORD dwRequestSize = _tcslen(sRequest) * sizeof(TCHAR);
+            aClient->PostMessage(sRequest, dwRequestSize);
+
+//             TCHAR sReply[MAX_PATH] = {0};
+//             DWORD dwReplySize = 0;
+//             if (aClient->RequestAndReply(sRequest, dwRequestSize, sReply, MAX_PATH, &dwReplySize))
+//          {
+//              int y=10;
+//          }
+//          int x=0;
         }
 
-        Sleep(10);
-		g_bExit=TRUE;
+//        Sleep(10);
+        g_bExit = TRUE;
     }
 
     return 0;
+}
+
+void TestRequestAndReply(IIPCObject* pNamedPipeClient)
+{
+    IIPCConnectorIterator* pClientIterator = pNamedPipeClient->GetClients();
+
+//  while(FALSE == g_bExit)
+    {
+        for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
+        {
+            IIPCConnector* aClient = pClientIterator->GetCurrent();
+
+            if(NULL == aClient)
+                continue;
+
+            TCHAR* sRequest = _T("Hello,Server\r\n");
+            DWORD dwRequestSize = _tcslen(sRequest) * sizeof(TCHAR);
+
+            TCHAR sReply[MAX_PATH] = {0};
+            DWORD dwReplySize = 0;
+
+            if(aClient->RequestAndReply(sRequest, dwRequestSize, sReply, MAX_PATH, &dwReplySize))
+            {
+                int y = 10;
+            }
+
+            int x = 0;
+        }
+
+//      g_bExit = TRUE;
+    }
 }
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -126,6 +167,8 @@ int _tmain(int argc, _TCHAR* argv[])
 
     if(!pNamedPipeClient->Create(_T("NamedPipeServer")))
         return -1;
+
+//    TestRequestAndReply(pNamedPipeClient);
 
     HANDLE hThread = CreateThread(NULL, 0, SendThread, pNamedPipeClient, 0, NULL);
 

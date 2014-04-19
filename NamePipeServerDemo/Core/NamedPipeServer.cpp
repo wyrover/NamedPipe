@@ -9,7 +9,7 @@ CNamedPipeServer::CNamedPipeServer(IIPCEvent* pEvent): m_pEventHandler(pEvent)
     , m_hCompletionPort(NULL)
 {
     m_sNamedPipe[MAX_PATH - 1] = _T('\0');
-    InitializeCriticalSection(&m_csReadIng);
+    InitializeCriticalSection(&m_csConnnectorMap);
 }
 
 
@@ -21,7 +21,7 @@ CNamedPipeServer::~CNamedPipeServer(void)
         m_hCompletionPort = NULL;
     }
 
-    DeleteCriticalSection(&m_csReadIng);
+    DeleteCriticalSection(&m_csConnnectorMap);
 }
 
 BOOL CNamedPipeServer::Create(LPCTSTR lpPipeName)
@@ -96,8 +96,6 @@ DWORD CNamedPipeServer::_IOCPThread()
     LPOVERLAPPED lpo;
     DWORD nBytes;
 
-    TCHAR sRecvBuf[SYELOG_MAXIMUM_MESSAGE] = {0};
-
     for(BOOL fKeepLooping = TRUE; fKeepLooping;)
     {
         pClient = NULL;
@@ -121,7 +119,7 @@ DWORD CNamedPipeServer::_IOCPThread()
         {
             CreateConnection(pClient);
             pClient->emPipeStatus = NAMED_PIPE_READING;
-            b = ReadFile(pClient->hPipe, sRecvBuf, SYELOG_MAXIMUM_MESSAGE, &nBytes, pClient);
+            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, &nBytes, pClient);
 
             if(!b)
             {
@@ -130,25 +128,21 @@ DWORD CNamedPipeServer::_IOCPThread()
             }
 
             WaitPipeConnection();
+            continue;
         }
-        else
+        else if(pClient->emPipeStatus == NAMED_PIPE_READING)
         {
-//             if(nBytes < offsetof(SYELOG_MESSAGE, szMessage))
-//             {
-//                 CloseConnection(pClient);
-//                 continue;
-//             }
+            IIPCConnector* pConnector = FindClient(pClient->hPipe);
+            OnRecv(this, pConnector, pClient->Message.szMessage, nBytes);
 
-            if(pClient->emPipeStatus == NAMED_PIPE_READING)
-            {
-                IIPCConnector* pConnector = FindClient(pClient->hPipe);
-                OnRecv(this, pConnector, sRecvBuf, nBytes);
+            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, &nBytes, pClient);
 
-                b = ReadFile(pClient->hPipe, sRecvBuf, SYELOG_MAXIMUM_MESSAGE, &nBytes, pClient);
-
-                if(!b && GetLastError() == ERROR_BROKEN_PIPE)
-                    CloseConnection(pClient);
-            }
+            if(!b && GetLastError() == ERROR_BROKEN_PIPE)
+                CloseConnection(pClient);
+        }
+        else if(pClient->emPipeStatus == NAMED_PIPE_DISCONNECT)
+        {
+            CloseConnection(pClient);
         }
     }
 
@@ -205,8 +199,6 @@ BOOL CNamedPipeServer::WaitPipeConnection()
 
 BOOL CNamedPipeServer::CloseConnection(PCLIENT pClient)
 {
-    EnterCriticalSection(&m_csReadIng);
-
     IIPCConnector* pConnector = FindClient(pClient->hPipe);
 
     if(NULL != pConnector)
@@ -231,36 +223,33 @@ BOOL CNamedPipeServer::CloseConnection(PCLIENT pClient)
         }
     }
 
-    LeaveCriticalSection(&m_csReadIng);
     return TRUE;
 }
 
 void CNamedPipeServer::AddClient(HANDLE hPort, IIPCConnector* pClient)
 {
-    EnterCriticalSection(&m_csReadIng);
+    EnterCriticalSection(&m_csConnnectorMap);
     m_connectorMap.insert(std::make_pair(hPort, pClient));
-    LeaveCriticalSection(&m_csReadIng);
+    LeaveCriticalSection(&m_csConnnectorMap);
 }
 
 void CNamedPipeServer::RemoveClient(HANDLE hPort)
 {
-    EnterCriticalSection(&m_csReadIng);
-
     IIPCConnector* pConnectorFind = FindClient(hPort);
 
     if(NULL != pConnectorFind)
     {
+        EnterCriticalSection(&m_csConnnectorMap);
         m_connectorMap.erase(hPort);
         delete pConnectorFind;
         pConnectorFind = NULL;
+        LeaveCriticalSection(&m_csConnnectorMap);
     }
-
-    LeaveCriticalSection(&m_csReadIng);
 }
 
 IIPCConnector* CNamedPipeServer::FindClient(HANDLE hPort)
 {
-    EnterCriticalSection(&m_csReadIng);
+    EnterCriticalSection(&m_csConnnectorMap);
 
     IIPCConnector* pConnectorFind = NULL;
     ConnectorMap::const_iterator cit = m_connectorMap.begin();
@@ -276,7 +265,7 @@ IIPCConnector* CNamedPipeServer::FindClient(HANDLE hPort)
             break;
     }
 
-    LeaveCriticalSection(&m_csReadIng);
+    LeaveCriticalSection(&m_csConnnectorMap);
     return pConnectorFind;
 }
 
@@ -321,41 +310,40 @@ void CNamedPipeServer::OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOI
 
 void CNamedPipeServer::Begin()
 {
-    EnterCriticalSection(&m_csReadIng);
+    EnterCriticalSection(&m_csConnnectorMap);
     m_citCurrent = m_connectorMap.begin();
-    LeaveCriticalSection(&m_csReadIng);
+    LeaveCriticalSection(&m_csConnnectorMap);
 }
 
 BOOL CNamedPipeServer::End()
 {
     BOOL bEnd = TRUE;
-    EnterCriticalSection(&m_csReadIng);
+    EnterCriticalSection(&m_csConnnectorMap);
     bEnd = (m_citCurrent == m_connectorMap.end());
-    LeaveCriticalSection(&m_csReadIng);
+    LeaveCriticalSection(&m_csConnnectorMap);
     return bEnd;
 }
 
 void CNamedPipeServer::Next()
 {
-    EnterCriticalSection(&m_csReadIng);
+    EnterCriticalSection(&m_csConnnectorMap);
 
     if(!End())
-    {
         m_citCurrent++;
-    }
 
-    LeaveCriticalSection(&m_csReadIng);
+    LeaveCriticalSection(&m_csConnnectorMap);
 }
 
 IIPCConnector* CNamedPipeServer::GetCurrent()
 {
     IIPCConnector* pConnector = NULL;
-    EnterCriticalSection(&m_csReadIng);
+
+    EnterCriticalSection(&m_csConnnectorMap);
 
     if(!End())
         pConnector = m_citCurrent->second;
 
-    LeaveCriticalSection(&m_csReadIng);
+    LeaveCriticalSection(&m_csConnnectorMap);
     return pConnector;
 }
 
@@ -366,52 +354,70 @@ IIPCConnectorIterator* CNamedPipeServer::GetClients()
 
 void CNamedPipeServer::CreateConnection(PCLIENT pClient)
 {
-    IIPCConnector* pConnector = new CNamedPipeConnector(pClient->hPipe, this, m_pEventHandler);
+    IIPCConnector* pConnector = new CNamedPipeConnector(pClient, this, m_pEventHandler);
     AddClient(pClient->hPipe, pConnector);
     OnConnect(this, pConnector);
 }
 
 BOOL CNamedPipeConnector::SendMessage(LPCVOID lpBuf, DWORD dwBufSize)
 {
-    if(NULL == m_hPipe)
+    if(NULL == m_pClient)
         return FALSE;
 
     if(NULL != m_pEventSensor)
         m_pEventSensor->OnSend(m_pServer, this, (LPVOID)lpBuf, dwBufSize);
 
     DWORD dwWrited = 0;
-    BOOL bSucess =::WriteFile(m_hPipe, lpBuf, dwBufSize, &dwWrited, NULL);
+    BOOL bSucess =::WriteFile(m_pClient->hPipe, lpBuf, dwBufSize, &dwWrited, NULL);
 
     return bSucess;
 }
 
 BOOL CNamedPipeConnector::PostMessage(LPCVOID lpBuf, DWORD dwBufSize)
 {
-    if(NULL == m_hPipe)
-        return FALSE;
-
-    DWORD dwWrited = 0;
-    BOOL bSucess =::WriteFile(m_hPipe, lpBuf, dwBufSize, &dwWrited, &m_ovPostMessage);
-
-    return (bSucess || GetLastError() == ERROR_IO_PENDING);
+    return SendMessage(lpBuf, dwBufSize);
 }
 
-CNamedPipeConnector::CNamedPipeConnector(HANDLE hPipe, IIPCObject* pServer, IIPCEvent* pEvent): m_hPipe(hPipe), m_pServer(pServer), m_pEventSensor(pEvent)
+CNamedPipeConnector::CNamedPipeConnector(PCLIENT pClient, IIPCObject* pServer, IIPCEvent* pEvent): m_pClient(pClient), m_pServer(pServer), m_pEventSensor(pEvent)
 {
-    ZeroMemory(&m_ovPostMessage, sizeof(OVERLAPPED));
-    m_ovPostMessage.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
 }
 
 CNamedPipeConnector::~CNamedPipeConnector()
 {
-    if(NULL != m_ovPostMessage.hEvent)
-    {
-        CloseHandle(m_ovPostMessage.hEvent);
-        m_ovPostMessage.hEvent = NULL;
-    }
+
 }
 
 HANDLE CNamedPipeConnector::GetHandle()
 {
-    return m_hPipe;
+    if(NULL != m_pClient)
+        return m_pClient->hPipe;
+
+    return NULL;
+}
+
+BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize)
+{
+    if(NULL == m_pClient)
+        return FALSE;
+
+    OVERLAPPED ov = {0};
+    ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    BOOL bSucess = TransactNamedPipe(m_pClient->hPipe, lpSendBuf, dwSendBufSize, lpReplyBuf, dwReplyBufSize, dwTransactSize, &ov);
+
+    if(!bSucess)
+    {
+        if(GetLastError() == ERROR_IO_PENDING)
+        {
+            if(WAIT_OBJECT_0 == WaitForSingleObject(ov.hEvent, INFINITE))
+            {
+                *dwTransactSize = ov.InternalHigh;
+                CloseHandle(ov.hEvent);
+                return TRUE;
+            }
+        }
+    }
+
+    CloseHandle(ov.hEvent);
+    return FALSE;
 }

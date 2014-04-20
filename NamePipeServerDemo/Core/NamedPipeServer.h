@@ -62,6 +62,8 @@ protected:
 
     IIPCConnector* FindClient(HANDLE hPort);
 
+    void HandleRequest(PCLIENT pClient);
+
 private:
 
     IIPCEvent* m_pEventHandler;
@@ -86,17 +88,28 @@ public:
 
     virtual HANDLE GetHandle();
 
+    virtual DWORD GetSID();
+
+    virtual LPCTSTR GetName();
+
     virtual BOOL SendMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
     virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize);
 
+    BOOL GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen);
+
+    friend class CNamedPipeServer;
 private:
     PCLIENT m_pClient;
 
     IIPCObject* m_pServer;
 
     IIPCEvent* m_pEventSensor;
+
+    DWORD m_dwPID;
+
+    TCHAR m_sName[MAX_PATH];
 };
 

@@ -6,12 +6,6 @@ class CNamedPipeClient : public IIPCObject , public IIPCEvent , public IIPCConne
 {
 public:
 
-    typedef struct _MSGQUEUE_ITEM
-    {
-        BYTE* sBuf;
-        DWORD dwBufSize;
-    } MSGQUEUE_ITEM, *LPMSGQUEUE_ITEM;
-
     CNamedPipeClient(IIPCEvent* pEvent);
 
     virtual ~CNamedPipeClient(void);
@@ -36,6 +30,10 @@ public:
 
     virtual HANDLE GetHandle();
 
+    virtual DWORD GetSID();
+
+    virtual LPCTSTR GetName();
+
     virtual BOOL SendMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize);
@@ -51,6 +49,8 @@ public:
     virtual IIPCConnector* GetCurrent();
 
 protected:
+
+    BOOL GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen);
 
     static DWORD __stdcall _RecvThreadProc(LPVOID lpParam);
 
@@ -69,6 +69,8 @@ private:
 
     OVERLAPPED m_ovWrite;
 
+    DWORD m_dwPID;
 
+    TCHAR m_sName[MAX_PATH];
 };
 

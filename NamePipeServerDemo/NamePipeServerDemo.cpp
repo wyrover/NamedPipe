@@ -31,7 +31,7 @@ public:
     virtual void OnDisConnect(IIPCObject* pServer, IIPCConnector* pClient)
     {
         _tsetlocale(LC_ALL, _T("chs"));
-        _tprintf_s(_T("客户端断开连接\r\n"));
+        _tprintf_s(_T("客户端 %d 断开连接\r\n"), pClient->GetSID());
     }
 
     virtual void OnCreate(IIPCObject* pServer)
@@ -48,24 +48,25 @@ public:
     {
         _tsetlocale(LC_ALL, _T("chs"));
 
-        BYTE sBuf[MAX_PATH] = {0};
-        memcpy_s(sBuf, MAX_PATH, lpBuf, MAX_PATH);
-        _tprintf_s(_T("%s"), sBuf);
+        _tprintf_s(_T("%s"), lpBuf);
 
-		pClient->SendMessage(lpBuf, dwBufSize);
+
+        TCHAR* sReply = _T("Hello,Client\r\n");
+        DWORD dwReplyLen = _tcslen(sReply) * sizeof(TCHAR);
+        pClient->SendMessage(sReply, dwReplyLen);
 
 //         IIPCConnectorIterator* pClientIterator = pServer->GetClients();
-// 
+//
 //         for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
 //         {
 //             IIPCConnector* aClient = pClientIterator->GetCurrent();
-// 
+//
 //             if(NULL == aClient)
 //                 continue;
-// 
+//
 //             if(!aClient->PostMessage(sBuf, _tcslen((TCHAR*)sBuf)*sizeof(TCHAR)))
 //                 break;
-// 
+//
 //             TCHAR sReply[MAX_PATH] = {0};
 //             DWORD dwReplySize = 0;
 //             aClient->RequestAndReply(sBuf, _tcslen((TCHAR*)sBuf)*sizeof(TCHAR), sReply, MAX_PATH, &dwReplySize);

@@ -152,16 +152,23 @@ DWORD __stdcall CNamedPipeClient::_RecvThreadProc(LPVOID lpParam)
 
 DWORD CNamedPipeClient::_RecvThread()
 {
-    TCHAR sBuf[SYELOG_MAXIMUM_MESSAGE] = {0};
+    NAMED_PIPE_MESSAGE message;
+    DWORD dwReaded = 0;
+    BOOL bSucess = FALSE;
 
     while(TRUE)
     {
-        DWORD dwReaded = 0;
+        dwReaded = 0;
+
         HANDLE hEvent = m_ovRead.hEvent;
         ZeroMemory(&m_ovRead, sizeof(OVERLAPPED));
         m_ovRead.hEvent = hEvent;
 
-        if(!ReadFile(m_hPipe, sBuf, SYELOG_MAXIMUM_MESSAGE, &dwReaded, &m_ovRead))
+        ZeroMemory(&message, sizeof(message));
+        bSucess = FALSE;
+        bSucess = ReadFile(m_hPipe, &message, sizeof(message), &dwReaded, &m_ovRead);
+
+        if(!bSucess)
         {
             if(GetLastError() == ERROR_IO_PENDING)
             {
@@ -169,7 +176,7 @@ DWORD CNamedPipeClient::_RecvThread()
                     break;
                 else
                 {
-                    OnRecv(this, this, sBuf, dwReaded);
+                    OnRecv(this, this, message.szRequest, message.dwRequestLen);
                 }
             }
             else if(GetLastError() == ERROR_BROKEN_PIPE)
@@ -178,7 +185,7 @@ DWORD CNamedPipeClient::_RecvThread()
             }
         }
         else
-            OnRecv(this, this, sBuf, dwReaded);
+            OnRecv(this, this, message.szRequest, message.dwRequestLen);
     }
 
     return 0;
@@ -198,7 +205,9 @@ BOOL CNamedPipeClient::SendMessage(LPCVOID lpBuf, DWORD dwBufSize)
         m_pEventSensor->OnSend(this, this, (LPVOID)lpBuf, dwBufSize);
 
     DWORD dwWrited = 0;
-    BOOL bSucess =::WriteFile(m_hPipe, lpBuf, dwBufSize, &dwWrited, NULL);
+    NAMED_PIPE_MESSAGE message;
+    GenericMessage(&message, lpBuf, dwBufSize);
+    BOOL bSucess =::WriteFile(m_hPipe, &message, message.dwTotalSize , &dwWrited, NULL);
 
     return bSucess;
 }
@@ -215,7 +224,10 @@ BOOL CNamedPipeClient::PostMessage(LPCVOID lpBuf, DWORD dwBufSize)
     HANDLE hEvent = m_ovWrite.hEvent;
     ZeroMemory(&m_ovWrite, sizeof(OVERLAPPED));
     m_ovWrite.hEvent = hEvent;
-    BOOL bSucess =::WriteFile(m_hPipe, lpBuf, dwBufSize, &dwWrited, &m_ovWrite);
+
+    NAMED_PIPE_MESSAGE message;
+    GenericMessage(&message, lpBuf, dwBufSize);
+    BOOL bSucess =::WriteFile(m_hPipe, &message, message.dwTotalSize , &dwWrited, &m_ovWrite);
     return ((bSucess) || (GetLastError() == ERROR_IO_PENDING));
 }
 
@@ -264,4 +276,29 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
 
     CloseHandle(ov.hEvent);
     return FALSE;
+}
+
+BOOL CNamedPipeClient::GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen)
+{
+    if(NULL == pMessage)
+        return FALSE;
+
+    ZeroMemory(pMessage, sizeof(NAMED_PIPE_MESSAGE));
+    pMessage->nProcessId = GetSID();
+    GetSystemTimeAsFileTime(&pMessage->ftOccurance);
+    memcpy_s(pMessage->szRequest, SYELOG_MAXIMUM_MESSAGE, lpRequest, dwRequestLen);
+    pMessage->dwRequestLen = dwRequestLen;
+    pMessage->dwTotalSize = sizeof(NAMED_PIPE_MESSAGE) - SYELOG_MAXIMUM_MESSAGE * sizeof(TCHAR) + dwRequestLen;
+
+    return TRUE;
+}
+
+DWORD CNamedPipeClient::GetSID()
+{
+    return GetCurrentProcessId();
+}
+
+LPCTSTR CNamedPipeClient::GetName()
+{
+    return m_sName;
 }

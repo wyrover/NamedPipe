@@ -119,7 +119,7 @@ DWORD CNamedPipeServer::_IOCPThread()
         {
             CreateConnection(pClient);
             pClient->emPipeStatus = NAMED_PIPE_READING;
-            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, &pClient->ovlappedRead);
+            b = ReadFile(pClient->hPipe, &pClient->Message, sizeof(pClient->Message), NULL, &pClient->ovlappedRead);
 
             if(!b)
             {
@@ -132,10 +132,9 @@ DWORD CNamedPipeServer::_IOCPThread()
         }
         else if(pClient->emPipeStatus == NAMED_PIPE_READING)
         {
-            IIPCConnector* pConnector = FindClient(pClient->hPipe);
-            OnRecv(this, pConnector, pClient->Message.szMessage, nBytes);
+            HandleRequest(pClient);
 
-            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, &pClient->ovlappedRead);
+            b = ReadFile(pClient->hPipe, &pClient->Message, sizeof(pClient->Message), NULL, &pClient->ovlappedRead);
 
             if(!b && GetLastError() == ERROR_BROKEN_PIPE)
                 CloseConnection(pClient);
@@ -147,6 +146,21 @@ DWORD CNamedPipeServer::_IOCPThread()
     }
 
     return 0;
+}
+
+void CNamedPipeServer::HandleRequest(PCLIENT pClient)
+{
+    IIPCConnector* pConnector = FindClient(pClient->hPipe);
+
+    if(NULL != pConnector)
+    {
+        CNamedPipeConnector* pNamedPipeConnector = dynamic_cast<CNamedPipeConnector*>(pConnector);
+
+        if(NULL != pNamedPipeConnector)
+            pNamedPipeConnector->m_dwPID = pClient->Message.nProcessId;
+
+        OnRecv(this, pConnector, &pClient->Message.szRequest, pClient->Message.dwRequestLen);
+    }
 }
 
 BOOL CNamedPipeServer::WaitPipeConnection()
@@ -367,7 +381,9 @@ BOOL CNamedPipeConnector::SendMessage(LPCVOID lpBuf, DWORD dwBufSize)
         m_pEventSensor->OnSend(m_pServer, this, (LPVOID)lpBuf, dwBufSize);
 
     DWORD dwWrited = 0;
-    BOOL bSucess =::WriteFile(m_pClient->hPipe, lpBuf, dwBufSize, &dwWrited, NULL);
+    NAMED_PIPE_MESSAGE message;
+    GenericMessage(&message, lpBuf, dwBufSize);
+    BOOL bSucess =::WriteFile(m_pClient->hPipe, &message, message.dwTotalSize , &dwWrited, NULL);
 
     return bSucess;
 }
@@ -375,6 +391,20 @@ BOOL CNamedPipeConnector::SendMessage(LPCVOID lpBuf, DWORD dwBufSize)
 BOOL CNamedPipeConnector::PostMessage(LPCVOID lpBuf, DWORD dwBufSize)
 {
     return SendMessage(lpBuf, dwBufSize);
+}
+
+BOOL CNamedPipeConnector::GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen)
+{
+    if(NULL == pMessage)
+        return FALSE;
+
+    ZeroMemory(pMessage, sizeof(NAMED_PIPE_MESSAGE));
+    pMessage->nProcessId = GetCurrentProcessId();
+    GetSystemTimeAsFileTime(&pMessage->ftOccurance);
+    memcpy_s(pMessage->szRequest, SYELOG_MAXIMUM_MESSAGE, lpRequest, dwRequestLen);
+    pMessage->dwRequestLen = dwRequestLen;
+    pMessage->dwTotalSize = sizeof(NAMED_PIPE_MESSAGE) - SYELOG_MAXIMUM_MESSAGE * sizeof(TCHAR) + dwRequestLen;;
+    return TRUE;
 }
 
 CNamedPipeConnector::CNamedPipeConnector(PCLIENT pClient, IIPCObject* pServer, IIPCEvent* pEvent): m_pClient(pClient), m_pServer(pServer), m_pEventSensor(pEvent)
@@ -418,4 +448,14 @@ BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize,
 
     CloseHandle(ov.hEvent);
     return FALSE;
+}
+
+DWORD CNamedPipeConnector::GetSID()
+{
+    return m_dwPID;
+}
+
+LPCTSTR CNamedPipeConnector::GetName()
+{
+    return m_sName;
 }

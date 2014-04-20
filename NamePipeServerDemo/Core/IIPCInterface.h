@@ -9,17 +9,31 @@ enum NAMEDPIPE_STATUS
     NAMED_PIPE_WRIEING,
     NAMED_PIPE_DISCONNECT
 };
-const int SYELOG_MAXIMUM_MESSAGE = 64*1024;
+
+const int SYELOG_MAXIMUM_MESSAGE = 64 * 1024;
+
 typedef struct _SYELOG_MESSAGE
 {
-    USHORT      nBytes;
-    BYTE        nFacility;
-    BYTE        nSeverity;
+    _SYELOG_MESSAGE()
+    {
+        ZeroMemory(szRequest, SYELOG_MAXIMUM_MESSAGE);
+        dwTotalSize = 0;
+        nProcessId = 0;
+        dwRequestLen = 0;
+    }
+
+    ~_SYELOG_MESSAGE()
+    {
+
+    }
+
+    DWORD       dwTotalSize;
     DWORD       nProcessId;
     FILETIME    ftOccurance;
-    BOOL        fTerminate;
-    TCHAR        szMessage[SYELOG_MAXIMUM_MESSAGE];
-} SYELOG_MESSAGE, *PSYELOG_MESSAGE;
+    DWORD       dwRequestLen;
+    TCHAR       szRequest[SYELOG_MAXIMUM_MESSAGE];
+
+} NAMED_PIPE_MESSAGE, *PSYELOG_MESSAGE;
 
 typedef struct _CLIENT
 {
@@ -29,8 +43,9 @@ typedef struct _CLIENT
         ovlappedRead.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
         hPipe = NULL;
         emPipeStatus = NAMED_PIPE_CONNECT;
-		ZeroMemory(&Message,sizeof(SYELOG_MESSAGE));
+        ZeroMemory(&Message, sizeof(NAMED_PIPE_MESSAGE));
     }
+
     ~_CLIENT()
     {
         if(NULL != ovlappedRead.hEvent)
@@ -39,11 +54,11 @@ typedef struct _CLIENT
             ovlappedRead.hEvent = NULL;
         }
     }
-    OVERLAPPED ovlappedRead;
-    HANDLE          hPipe;
-    NAMEDPIPE_STATUS            emPipeStatus;
-    PVOID           Zero;
-    SYELOG_MESSAGE  Message;
+
+    OVERLAPPED          ovlappedRead;
+    HANDLE              hPipe;
+    NAMEDPIPE_STATUS    emPipeStatus;
+    NAMED_PIPE_MESSAGE      Message;
 
 } CLIENT, *PCLIENT;
 
@@ -52,6 +67,8 @@ typedef struct _CLIENT
 struct pure_virtual IIPCConnector
 {
     virtual ~IIPCConnector() = 0 {};
+    virtual DWORD GetSID() = 0;
+    virtual LPCTSTR GetName() = 0;
     virtual HANDLE GetHandle() = 0;
     virtual BOOL SendMessage(LPCVOID lpBuf, DWORD dwBufSize) = 0;
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize) = 0;

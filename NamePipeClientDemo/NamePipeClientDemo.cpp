@@ -54,7 +54,7 @@ public:
         TCHAR aBuf[MAX_PATH] = {0};
         _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
 
-        if(!pClient->SendMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
+        if(!pClient->PostMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
             return ;
     }
 
@@ -146,7 +146,8 @@ void TestRequestAndReply(IIPCObject* pNamedPipeClient)
 
             if(aClient->RequestAndReply(sRequest, dwRequestSize, sReply, MAX_PATH, &dwReplySize))
             {
-                int y = 10;
+				_tsetlocale(LC_ALL, _T("chs"));
+				_tprintf_s(_T("%s"), sReply);
             }
 
             int x = 0;
@@ -168,15 +169,15 @@ int _tmain(int argc, _TCHAR* argv[])
     if(!pNamedPipeClient->Create(_T("NamedPipeServer")))
         return -1;
 
-//    TestRequestAndReply(pNamedPipeClient);
+    TestRequestAndReply(pNamedPipeClient);
 
-    HANDLE hThread = CreateThread(NULL, 0, SendThread, pNamedPipeClient, 0, NULL);
+//    HANDLE hThread = CreateThread(NULL, 0, SendThread, pNamedPipeClient, 0, NULL);
 
     _getch();
 
-    g_bExit = TRUE;
-    WaitForSingleObject(hThread, INFINITE);
-    CloseHandle(hThread);
+//     g_bExit = TRUE;
+//     WaitForSingleObject(hThread, INFINITE);
+//     CloseHandle(hThread);
 
     pNamedPipeClient->Close();
     delete pNamedPipeClient;

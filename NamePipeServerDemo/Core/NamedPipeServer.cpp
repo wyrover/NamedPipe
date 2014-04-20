@@ -119,7 +119,7 @@ DWORD CNamedPipeServer::_IOCPThread()
         {
             CreateConnection(pClient);
             pClient->emPipeStatus = NAMED_PIPE_READING;
-            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, &nBytes, pClient);
+            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, pClient);
 
             if(!b)
             {
@@ -135,7 +135,7 @@ DWORD CNamedPipeServer::_IOCPThread()
             IIPCConnector* pConnector = FindClient(pClient->hPipe);
             OnRecv(this, pConnector, pClient->Message.szMessage, nBytes);
 
-            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, &nBytes, pClient);
+            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, pClient);
 
             if(!b && GetLastError() == ERROR_BROKEN_PIPE)
                 CloseConnection(pClient);
@@ -402,7 +402,7 @@ BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize,
         return FALSE;
 
     OVERLAPPED ov = {0};
-    ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     BOOL bSucess = TransactNamedPipe(m_pClient->hPipe, lpSendBuf, dwSendBufSize, lpReplyBuf, dwReplyBufSize, dwTransactSize, &ov);
 
     if(!bSucess)

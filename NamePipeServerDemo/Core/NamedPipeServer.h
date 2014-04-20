@@ -1,3 +1,7 @@
+// ²Î¿¼ÎÄÕÂMSDN
+// I/O Completion Ports http://msdn.microsoft.com/en-us/library/windows/desktop/aa365198%28v=vs.85%29.aspx
+// Synchronous and Asynchronous I/O http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683%28v=vs.85%29.aspx
+// Synchronization and Overlapped Input and Output http://msdn.microsoft.com/en-us/library/windows/desktop/ms686358%28v=vs.85%29.aspx
 #pragma once
 #include "IIPCInterface.h"
 #include <map>

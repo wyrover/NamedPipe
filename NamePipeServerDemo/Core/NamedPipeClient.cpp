@@ -247,7 +247,7 @@ IIPCConnector* CNamedPipeClient::GetCurrent()
 BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize)
 {
     OVERLAPPED ov = {0};
-    ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
     BOOL bSucess = TransactNamedPipe(m_hPipe, lpSendBuf, dwSendBufSize, lpReplyBuf, dwReplyBufSize, dwTransactSize, &ov);
 
     if(!bSucess)

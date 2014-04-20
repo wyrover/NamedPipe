@@ -254,9 +254,8 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
     {
         if(GetLastError() == ERROR_IO_PENDING)
         {
-            if(WAIT_OBJECT_0 == WaitForSingleObject(ov.hEvent, INFINITE))
+            if(GetOverlappedResult(m_hPipe, &ov, dwTransactSize, TRUE))
             {
-                *dwTransactSize = ov.InternalHigh;
                 CloseHandle(ov.hEvent);
                 return TRUE;
             }

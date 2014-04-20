@@ -119,7 +119,7 @@ DWORD CNamedPipeServer::_IOCPThread()
         {
             CreateConnection(pClient);
             pClient->emPipeStatus = NAMED_PIPE_READING;
-            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, pClient);
+            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, &pClient->ovlappedRead);
 
             if(!b)
             {
@@ -135,7 +135,7 @@ DWORD CNamedPipeServer::_IOCPThread()
             IIPCConnector* pConnector = FindClient(pClient->hPipe);
             OnRecv(this, pConnector, pClient->Message.szMessage, nBytes);
 
-            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, pClient);
+            b = ReadFile(pClient->hPipe, pClient->Message.szMessage, SYELOG_MAXIMUM_MESSAGE, NULL, &pClient->ovlappedRead);
 
             if(!b && GetLastError() == ERROR_BROKEN_PIPE)
                 CloseConnection(pClient);
@@ -168,14 +168,13 @@ BOOL CNamedPipeServer::WaitPipeConnection()
         if(pClient == NULL)
             break;
 
-        ZeroMemory(pClient, sizeof(CLIENT));
         pClient->hPipe = hPipe;
         pClient->emPipeStatus = NAMED_PIPE_CONNECT;
 
         if(NULL == CreateIoCompletionPort(hPipe, m_hCompletionPort, (ULONG_PTR)pClient, 0))
             break;
 
-        if(!ConnectNamedPipe(hPipe, pClient))
+        if(!ConnectNamedPipe(hPipe, &pClient->ovlappedRead))
         {
             if(GetLastError() != ERROR_IO_PENDING && GetLastError() != ERROR_PIPE_LISTENING)
                 break;
@@ -409,9 +408,8 @@ BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize,
     {
         if(GetLastError() == ERROR_IO_PENDING)
         {
-            if(WAIT_OBJECT_0 == WaitForSingleObject(ov.hEvent, INFINITE))
+            if(GetOverlappedResult(m_pClient->hPipe, &ov, dwTransactSize, TRUE))
             {
-                *dwTransactSize = ov.InternalHigh;
                 CloseHandle(ov.hEvent);
                 return TRUE;
             }

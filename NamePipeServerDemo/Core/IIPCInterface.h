@@ -9,7 +9,7 @@ enum NAMEDPIPE_STATUS
     NAMED_PIPE_WRIEING,
     NAMED_PIPE_DISCONNECT
 };
-const int SYELOG_MAXIMUM_MESSAGE = 4086;
+const int SYELOG_MAXIMUM_MESSAGE = 64*1024;
 typedef struct _SYELOG_MESSAGE
 {
     USHORT      nBytes;
@@ -21,8 +21,25 @@ typedef struct _SYELOG_MESSAGE
     TCHAR        szMessage[SYELOG_MAXIMUM_MESSAGE];
 } SYELOG_MESSAGE, *PSYELOG_MESSAGE;
 
-typedef struct _CLIENT : OVERLAPPED
+typedef struct _CLIENT
 {
+    _CLIENT()
+    {
+        ZeroMemory(&ovlappedRead, sizeof(OVERLAPPED));
+        ovlappedRead.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+        hPipe = NULL;
+        emPipeStatus = NAMED_PIPE_CONNECT;
+		ZeroMemory(&Message,sizeof(SYELOG_MESSAGE));
+    }
+    ~_CLIENT()
+    {
+        if(NULL != ovlappedRead.hEvent)
+        {
+            CloseHandle(ovlappedRead.hEvent);
+            ovlappedRead.hEvent = NULL;
+        }
+    }
+    OVERLAPPED ovlappedRead;
     HANDLE          hPipe;
     NAMEDPIPE_STATUS            emPipeStatus;
     PVOID           Zero;

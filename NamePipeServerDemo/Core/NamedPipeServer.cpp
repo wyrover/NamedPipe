@@ -110,9 +110,15 @@ DWORD CNamedPipeServer::_IOCPThread()
         }
         else if(!b)
         {
-            CloseConnection(pClient);
-            pClient = NULL;
-            continue;
+            if(GetLastError() == ERROR_BROKEN_PIPE)
+            {
+                if(NULL == lpo)
+                {
+                    CloseConnection(pClient);
+                    pClient = NULL;
+                    continue;
+                }
+            }
         }
 
         if(pClient->emPipeStatus == NAMED_PIPE_CONNECT)
@@ -437,8 +443,7 @@ BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize,
 
     OVERLAPPED ov = {0};
     ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    BOOL bSucess = FALSE;
-    bSucess = TransactNamedPipe(m_pClient->hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
+    BOOL bSucess = TransactNamedPipe(m_pClient->hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
 
     if(!bSucess)
     {
@@ -447,14 +452,7 @@ BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize,
             if(GetOverlappedResult(m_pClient->hPipe, &ov, dwTransactSize, TRUE))
                 bSucess = TRUE;
         }
-
-        while(GetLastError() == ERROR_PIPE_BUSY)
-        {
-            bSucess = TransactNamedPipe(m_pClient->hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
-        }
     }
-
-    *dwTransactSize = 0;
 
     if(bSucess)
     {

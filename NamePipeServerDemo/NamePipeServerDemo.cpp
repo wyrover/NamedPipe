@@ -26,6 +26,8 @@ public:
     {
         _tsetlocale(LC_ALL, _T("chs"));
         _tprintf_s(_T("客户端连接到来\r\n"));
+
+        
     }
 
     virtual void OnDisConnect(IIPCObject* pServer, IIPCConnector* pClient)
@@ -51,9 +53,11 @@ public:
         _tprintf_s(_T("%s"), lpBuf);
 
 
-         TCHAR* sReply = _T("你好,客户端\r\n");
-         DWORD dwReplyLen = _tcslen(sReply) * sizeof(TCHAR);
-        pClient->SendMessage(sReply, dwReplyLen);
+
+
+//          TCHAR* sReply = _T("你好,客户端\r\n");
+//          DWORD dwReplyLen = _tcslen(sReply) * sizeof(TCHAR);
+//         pClient->SendMessage(sReply, dwReplyLen);
 
 //         IIPCConnectorIterator* pClientIterator = pServer->GetClients();
 //
@@ -119,6 +123,27 @@ int _tmain(int argc, _TCHAR* argv[])
 //    HANDLE hThread = CreateThread(NULL, 0, PostThread, pNamedPipeServer, 0, NULL);
 
     _getch();
+
+	TCHAR* sRequest = _T("你好,XXX\r\n");
+	DWORD dwRequestSize = (_tcslen(sRequest) + 1) * sizeof(TCHAR);
+
+	TCHAR sReply[MAX_PATH] = {0};
+	DWORD dwReplySize = 0;
+	DWORD dwTransSize = 0;
+
+	IIPCConnectorIterator* pClientIterator = pNamedPipeServer->GetClients();
+	for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
+	{
+		IIPCConnector* aClient = pClientIterator->GetCurrent();
+
+		if(NULL == aClient)
+			continue;
+
+		TCHAR* sReply = _T("Hello,Client\r\n");
+		aClient->RequestAndReply(sRequest, dwRequestSize, &sReply, MAX_PATH, &dwTransSize);
+	}
+
+	_getch();
 
 //     g_bExit = TRUE;
 //     WaitForSingleObject(hThread, INFINITE);

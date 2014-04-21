@@ -57,12 +57,12 @@ public:
 
 //        TCHAR* sReply = _T("Hello,Server\r\n");
 
-//         static int x = 0;
-//         TCHAR aBuf[MAX_PATH] = {0};
-//         _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
+        static int x = 0;
+        TCHAR aBuf[MAX_PATH] = {0};
+        _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
 // 
-//         if(!pClient->PostMessage(sReply, _tcslen(sReply)*sizeof(TCHAR)))
-//             return ;
+        if(!pClient->PostMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
+            return ;
     }
 
     virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize)

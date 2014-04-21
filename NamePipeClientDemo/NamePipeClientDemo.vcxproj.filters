@@ -33,6 +33,9 @@
     <ClInclude Include="..\NamePipeServerDemo\Core\NamedPipeClient.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="..\NamePipeServerDemo\Core\OverlappedPool.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -42,6 +45,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="..\NamePipeServerDemo\Core\NamedPipeClient.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="..\NamePipeServerDemo\Core\OverlappedPool.cpp">
       <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>

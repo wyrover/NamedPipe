@@ -35,30 +35,19 @@ typedef struct _SYELOG_MESSAGE
 
 } NAMED_PIPE_MESSAGE, *PSYELOG_MESSAGE;
 
-typedef struct _CLIENT
+typedef struct _CLIENT: OVERLAPPED
 {
     _CLIENT()
     {
-        ZeroMemory(&ovlappedRead, sizeof(OVERLAPPED));
-        ovlappedRead.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
         hPipe = NULL;
         emPipeStatus = NAMED_PIPE_CONNECT;
-        ZeroMemory(&Message, sizeof(NAMED_PIPE_MESSAGE));
+        ZeroMemory(&replyMessage, sizeof(NAMED_PIPE_MESSAGE));
     }
 
-    ~_CLIENT()
-    {
-        if(NULL != ovlappedRead.hEvent)
-        {
-            CloseHandle(ovlappedRead.hEvent);
-            ovlappedRead.hEvent = NULL;
-        }
-    }
-
-    OVERLAPPED          ovlappedRead;
     HANDLE              hPipe;
     NAMEDPIPE_STATUS    emPipeStatus;
-    NAMED_PIPE_MESSAGE      Message;
+    NAMED_PIPE_MESSAGE  requestMessage;
+	NAMED_PIPE_MESSAGE	replyMessage;
 
 } CLIENT, *PCLIENT;
 

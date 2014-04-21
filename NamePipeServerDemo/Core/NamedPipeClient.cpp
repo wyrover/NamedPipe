@@ -258,24 +258,34 @@ IIPCConnector* CNamedPipeClient::GetCurrent()
 
 BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize)
 {
+    NAMED_PIPE_MESSAGE requestMessage;
+    GenericMessage(&requestMessage, lpSendBuf, dwSendBufSize);
+    NAMED_PIPE_MESSAGE replyMessage;
+    replyMessage.dwTotalSize = sizeof(NAMED_PIPE_MESSAGE);
+
     OVERLAPPED ov = {0};
     ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    BOOL bSucess = TransactNamedPipe(m_hPipe, lpSendBuf, dwSendBufSize, lpReplyBuf, dwReplyBufSize, dwTransactSize, &ov);
+    BOOL bSucess = TransactNamedPipe(m_hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
 
     if(!bSucess)
     {
         if(GetLastError() == ERROR_IO_PENDING)
         {
             if(GetOverlappedResult(m_hPipe, &ov, dwTransactSize, TRUE))
-            {
-                CloseHandle(ov.hEvent);
-                return TRUE;
-            }
+                bSucess = TRUE;
         }
     }
 
+    *dwTransactSize = 0;
+
+    if(bSucess)
+    {
+        memcpy_s(lpReplyBuf, dwReplyBufSize, requestMessage.szRequest, requestMessage.dwRequestLen);
+        *dwTransactSize = requestMessage.dwRequestLen;
+    }
+
     CloseHandle(ov.hEvent);
-    return FALSE;
+    return bSucess;
 }
 
 BOOL CNamedPipeClient::GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen)

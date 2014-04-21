@@ -430,34 +430,40 @@ BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize,
     if(NULL == m_pClient)
         return FALSE;
 
-	NAMED_PIPE_MESSAGE requestMessage;
-	GenericMessage(&requestMessage, lpSendBuf, dwSendBufSize);
-	NAMED_PIPE_MESSAGE replyMessage;
-	replyMessage.dwTotalSize = sizeof(NAMED_PIPE_MESSAGE);
+    NAMED_PIPE_MESSAGE requestMessage;
+    GenericMessage(&requestMessage, lpSendBuf, dwSendBufSize);
+    NAMED_PIPE_MESSAGE replyMessage;
+    replyMessage.dwTotalSize = sizeof(NAMED_PIPE_MESSAGE);
 
-	OVERLAPPED ov = {0};
-	ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-	BOOL bSucess = TransactNamedPipe(m_pClient->hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
+    OVERLAPPED ov = {0};
+    ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    BOOL bSucess = FALSE;
+    bSucess = TransactNamedPipe(m_pClient->hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
 
-	if(!bSucess)
-	{
-		if(GetLastError() == ERROR_IO_PENDING)
-		{
-			if(GetOverlappedResult(m_pClient->hPipe, &ov, dwTransactSize, TRUE))
-				bSucess = TRUE;
-		}
-	}
+    if(!bSucess)
+    {
+        if(GetLastError() == ERROR_IO_PENDING)
+        {
+            if(GetOverlappedResult(m_pClient->hPipe, &ov, dwTransactSize, TRUE))
+                bSucess = TRUE;
+        }
 
-	*dwTransactSize = 0;
+        while(GetLastError() == ERROR_PIPE_BUSY)
+        {
+            bSucess = TransactNamedPipe(m_pClient->hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
+        }
+    }
 
-	if(bSucess)
-	{
-		memcpy_s(lpReplyBuf, dwReplyBufSize, requestMessage.szRequest, requestMessage.dwRequestLen);
-		*dwTransactSize = requestMessage.dwRequestLen;
-	}
+    *dwTransactSize = 0;
 
-	CloseHandle(ov.hEvent);
-	return bSucess;
+    if(bSucess)
+    {
+        memcpy_s(lpReplyBuf, dwReplyBufSize, replyMessage.szRequest, replyMessage.dwRequestLen);
+        *dwTransactSize = requestMessage.dwRequestLen;
+    }
+
+    CloseHandle(ov.hEvent);
+    return bSucess;
 }
 
 DWORD CNamedPipeConnector::GetSID()

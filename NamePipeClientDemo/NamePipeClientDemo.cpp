@@ -55,14 +55,14 @@ public:
         _tsetlocale(LC_ALL, _T("chs"));
         _tprintf_s(_T("%s"), lpBuf);
 
-        TCHAR* sReply = _T("Hello,Server\r\n");
+//        TCHAR* sReply = _T("Hello,Server\r\n");
 
 //         static int x = 0;
 //         TCHAR aBuf[MAX_PATH] = {0};
 //         _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
 // 
-        if(!pClient->PostMessage(sReply, _tcslen(sReply)*sizeof(TCHAR)))
-            return ;
+//         if(!pClient->PostMessage(sReply, _tcslen(sReply)*sizeof(TCHAR)))
+//             return ;
     }
 
     virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize)
@@ -145,7 +145,7 @@ void TestRequestAndReply(IIPCObject* pNamedPipeClient)
             if(NULL == aClient)
                 continue;
 
-            TCHAR* sRequest = _T("Hello,Server\r\n");
+            TCHAR* sRequest = _T("你好,服务端\r\n");
             DWORD dwRequestSize = _tcslen(sRequest) * sizeof(TCHAR);
 
             TCHAR sReply[MAX_PATH] = {0};

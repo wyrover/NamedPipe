@@ -265,7 +265,8 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
 
     OVERLAPPED ov = {0};
     ov.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    BOOL bSucess = TransactNamedPipe(m_hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
+    BOOL bSucess = FALSE;
+    bSucess = TransactNamedPipe(m_hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
 
     if(!bSucess)
     {
@@ -274,13 +275,18 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
             if(GetOverlappedResult(m_hPipe, &ov, dwTransactSize, TRUE))
                 bSucess = TRUE;
         }
+
+        while(GetLastError() == ERROR_PIPE_BUSY)
+        {
+            bSucess = TransactNamedPipe(m_hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &ov);
+        }
     }
 
     *dwTransactSize = 0;
 
     if(bSucess)
     {
-        memcpy_s(lpReplyBuf, dwReplyBufSize, requestMessage.szRequest, requestMessage.dwRequestLen);
+        memcpy_s(lpReplyBuf, dwReplyBufSize, replyMessage.szRequest, replyMessage.dwRequestLen);
         *dwTransactSize = requestMessage.dwRequestLen;
     }
 

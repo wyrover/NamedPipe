@@ -51,8 +51,8 @@ public:
         _tprintf_s(_T("%s"), lpBuf);
 
 
-        TCHAR* sReply = _T("Hello,Client\r\n");
-        DWORD dwReplyLen = _tcslen(sReply) * sizeof(TCHAR);
+         TCHAR* sReply = _T("ÄãºÃ,¿Í»§¶Ë\r\n");
+         DWORD dwReplyLen = _tcslen(sReply) * sizeof(TCHAR);
         pClient->SendMessage(sReply, dwReplyLen);
 
 //         IIPCConnectorIterator* pClientIterator = pServer->GetClients();

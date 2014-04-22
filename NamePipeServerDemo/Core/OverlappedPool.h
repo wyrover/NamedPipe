@@ -14,7 +14,7 @@ public:
 
     void Create(DWORD dwSize = 20);
     void Close();
-    LPOVERLAPPED_PACKAGE Alloc();
+    LPOVERLAPPED_PACKAGE Alloc(IPC_MESSAGE_TYPE messageType);
     void Release(LPOVERLAPPED_PACKAGE lpo);
     DWORD WaitAll(BOOL bWait, DWORD dwTimeout);
 
@@ -26,4 +26,6 @@ private:
     CRITICAL_SECTION m_cslock;
 //  HANDLE* m_pEventHandleArr;
 };
+
+LPOVERLAPPED_PACKAGE CreateOverlapped(IPC_MESSAGE_TYPE messageType);
 

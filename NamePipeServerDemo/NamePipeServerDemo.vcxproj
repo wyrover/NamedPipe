@@ -145,13 +145,11 @@
   <ItemGroup>
     <ClInclude Include="Core\IIPCInterface.h" />
     <ClInclude Include="Core\NamedPipeServer.h" />
-    <ClInclude Include="Core\OverlappedPool.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Core\NamedPipeServer.cpp" />
-    <ClCompile Include="Core\OverlappedPool.cpp" />
     <ClCompile Include="NamePipeServerDemo.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

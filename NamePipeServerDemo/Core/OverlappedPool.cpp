@@ -24,11 +24,6 @@ void COverlappedPool::Create(DWORD dwSize /*= 20*/)
 
     for(DWORD i = 0; i < dwSize; i++)
     {
-        ZeroMemory(&lpOvItem[i], sizeof(OVERLAPPED_PACKAGE));
-        lpOvItem[i].ovHeader.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-        lpOvItem[i].dwProcessID = GetCurrentProcessId();
-        GetSystemTimeAsFileTime(&lpOvItem[i].ftOccurance);
-        lpOvItem[i].dwStatus = NAMED_PIPE_CONNECT;
         m_vecOvItem.push_back(&lpOvItem[i]);
 
         //m_pEventHandleArr[i] = lpOvItem[i].ov.hEvent;
@@ -38,22 +33,17 @@ void COverlappedPool::Create(DWORD dwSize /*= 20*/)
 void COverlappedPool::Close()
 {
     EnterCriticalSection(&m_cslock);
-    DWORD dwPoolSize = m_vecOvItem.size();
+	DWORD dwPoolSize = m_vecOvItem.size();
 
-    for(DWORD i = 0; i < dwPoolSize; i++)
-    {
-        LPOVERLAPPED_PACKAGE lpOvItem = m_vecOvItem[i];
+	for(DWORD i = 0; i < dwPoolSize; i++)
+	{
+		LPOVERLAPPED_PACKAGE lpOvItem = m_vecOvItem[i];
 
-        if(NULL != lpOvItem)
-        {
-            SetEvent(lpOvItem->ovHeader.hEvent);
-            WaitForSingleObject(lpOvItem->ovHeader.hEvent, INFINITE);
-            CloseHandle(lpOvItem->ovHeader.hEvent);
-            lpOvItem->ovHeader.hEvent = NULL;
-            delete lpOvItem;
-            lpOvItem = NULL;
-        }
-    }
+		if(NULL != lpOvItem)
+		{
+			delete lpOvItem;			lpOvItem = NULL;
+		}
+	}
 
     m_vecOvItem.clear();
 
@@ -62,45 +52,44 @@ void COverlappedPool::Close()
     LeaveCriticalSection(&m_cslock);
 }
 
-LPOVERLAPPED_PACKAGE COverlappedPool::Alloc()
+LPOVERLAPPED_PACKAGE COverlappedPool::Alloc(IPC_MESSAGE_TYPE messageType)
 {
-    LPOVERLAPPED_PACKAGE itemNotUsed = NULL;
-    EnterCriticalSection(&m_cslock);
-    DWORD dwPoolSize = m_vecOvItem.size();
-
-    for(DWORD i = 0; i < dwPoolSize; i++)
-    {
-        LPOVERLAPPED_PACKAGE lpOvItem = m_vecOvItem[i];
-
-        if((NULL != lpOvItem) && (FALSE == lpOvItem->bUsed))
-        {
-            if(NULL != lpOvItem->ovHeader.hEvent)
-                ResetEvent(lpOvItem->ovHeader.hEvent);
-
-            lpOvItem->bUsed = TRUE;
-            itemNotUsed = lpOvItem;
-            break;
-        }
-    }
-
-    LeaveCriticalSection(&m_cslock);
-    return itemNotUsed;
+    LPOVERLAPPED_PACKAGE itemNotUsed = new OVERLAPPED_PACKAGE;
+	itemNotUsed->dwStatus=messageType;
+//     EnterCriticalSection(&m_cslock);
+//     DWORD dwPoolSize = m_vecOvItem.size();
+// 
+//     for(DWORD i = 0; i < dwPoolSize; i++)
+//     {
+//         LPOVERLAPPED_PACKAGE lpOvItem = m_vecOvItem[i];
+// 
+//         if((NULL != lpOvItem) && (FALSE == lpOvItem->bUsed))
+//         {
+//             ResetEvent(lpOvItem->ovHeader.hEvent);
+//             lpOvItem->dwStatus = messageType;
+//             lpOvItem->bUsed = TRUE;
+//             itemNotUsed = lpOvItem;
+//             break;
+//         }
+//     }
+// 
+//     LeaveCriticalSection(&m_cslock);
+     return itemNotUsed;
 }
 
 void COverlappedPool::Release(LPOVERLAPPED_PACKAGE lpo)
 {
-    EnterCriticalSection(&m_cslock);
-    assert(lpo->bUsed);
-
-    if((NULL != lpo) && (TRUE == lpo->bUsed))
-    {
-        if(NULL != lpo->ovHeader.hEvent)
-            SetEvent(lpo->ovHeader.hEvent);
-
-        lpo->bUsed = FALSE;
-    }
-
-    LeaveCriticalSection(&m_cslock);
+	CloseHandle(lpo->hEvent);
+//     EnterCriticalSection(&m_cslock);
+//     assert(lpo->bUsed);
+// 
+//     if((NULL != lpo) && (TRUE == lpo->bUsed))
+//     {
+//         ResetEvent(lpo->ovHeader.hEvent);
+//         lpo->bUsed = FALSE;
+//     }
+// 
+//     LeaveCriticalSection(&m_cslock);
 }
 
 // LPOVERLAPPED_PACKAGE COverlappedPool::FindItemByOv(LPOVERLAPPED lpo)
@@ -132,4 +121,13 @@ DWORD COverlappedPool::WaitAll(BOOL bWait, DWORD dwTimeout)
     //DWORD dwVecSize = m_vecOvItem.size();
     //return WaitForMultipleObjects(dwVecSize, m_pEventHandleArr, TRUE, dwTimeout);
     return 0;
+}
+
+LPOVERLAPPED_PACKAGE CreateOverlapped(IPC_MESSAGE_TYPE messageType)
+{
+	LPOVERLAPPED_PACKAGE package=new OVERLAPPED_PACKAGE;
+	ZeroMemory(package,sizeof(OVERLAPPED_PACKAGE));
+	package->hEvent=CreateEvent(NULL,FALSE,FALSE,NULL);
+	package->dwStatus=messageType;
+	return package;
 }

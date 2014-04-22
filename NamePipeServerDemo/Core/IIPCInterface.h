@@ -2,71 +2,28 @@
 #include <windows.h>
 #include <map>
 
-enum OVERLAPPED_STATUS
+enum IPC_MESSAGE_TYPE
 {
-    NAMED_PIPE_CONNECT,
-    NAMED_PIPE_READING,
-    NAMED_PIPE_WRIEING,
-    NAMED_PIPE_DISCONNECT
+    IPC_MESSAGE_UKNOWN,
+    IPC_MESSAGE_CLIENTCONNECT,
+    IPC_MESSAGE_READ,
+    IPC_MESSAGE_WRIE,
+    IPC_MESSAGE_READ_WRITE,
+    IPC_MESSAGE_CLIENTDISCONNECT
 };
 
 const int SYELOG_MAXIMUM_MESSAGE = 4096;
 
-typedef struct _SYELOG_MESSAGE
+typedef struct _IPC_DATA_PACKAGE : OVERLAPPED
 {
-    _SYELOG_MESSAGE()
-    {
-        ZeroMemory(szRequest, SYELOG_MAXIMUM_MESSAGE);
-        dwTotalSize = 0;
-        nProcessId = 0;
-        dwRequestLen = 0;
-    }
-
-    ~_SYELOG_MESSAGE()
-    {
-
-    }
-
-    DWORD       dwTotalSize;
-    DWORD       nProcessId;
-    FILETIME    ftOccurance;
-    DWORD       dwRequestLen;
-    TCHAR       szRequest[SYELOG_MAXIMUM_MESSAGE];
-
-} NAMED_PIPE_MESSAGE, *PSYELOG_MESSAGE;
-
-// typedef struct _CLIENT: OVERLAPPED
-// {
-//     _CLIENT()
-//     {
-//         hPipe = NULL;
-//         emPipeStatus = NAMED_PIPE_CONNECT;
-//         ZeroMemory(&replyMessage, sizeof(NAMED_PIPE_MESSAGE));
-//     }
-//
-//     HANDLE              hPipe;
-//     OVERLAPPED_STATUS    emPipeStatus;
-//     NAMED_PIPE_MESSAGE  requestMessage;
-//  NAMED_PIPE_MESSAGE  replyMessage;
-//
-// } CLIENT, *PCLIENT;
-
-typedef struct _OVERLAPPED_PACKAGE
-{
-    OVERLAPPED ovHeader;                            // OVERLAPPED同步头
-    HANDLE hCom;                                    // 通信句柄
     DWORD dwProcessID;                              // 当前进程ID
     FILETIME ftOccurance;                           // 异步投递发生时间
-    DWORD dwRequestSize;                            // 用户携带请求数据量
-    BYTE lpRequestBuf[SYELOG_MAXIMUM_MESSAGE];      // 用户请求缓冲区
-    DWORD dwReplySize;                              // 用户回应数据量
-    BYTE lpReply[SYELOG_MAXIMUM_MESSAGE];           // 用户回应缓冲区
-    OVERLAPPED_STATUS dwStatus;                     // 当前异步投递状态
-    BOOL bUsed;                                     // 当前是否正在被使用
-    BOOL bAsync;                                    // 是同步请求还是异步请求
+    DWORD dwDataSize;                              // 用户回应数据量
+    BYTE lpData[SYELOG_MAXIMUM_MESSAGE];           // 用户回应缓冲区
     DWORD dwTotalSize;                              // 通信包整体大小
+    IPC_MESSAGE_TYPE emMessageType;
 
-} OVERLAPPED_PACKAGE, *LPOVERLAPPED_PACKAGE;
+} IPC_DATA_PACKAGE, *LPIPC_DATA_PACKAGE;
 
 #define pure_virtual __declspec(novtable)
 

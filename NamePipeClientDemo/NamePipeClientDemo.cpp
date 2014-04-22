@@ -61,8 +61,8 @@ public:
         TCHAR aBuf[MAX_PATH] = {0};
         _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
 // 
-        if(!pClient->PostMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
-            return ;
+//         if(!pClient->PostMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
+//             return ;
     }
 
     virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize)
@@ -91,7 +91,7 @@ DWORD __stdcall SendThread(LPVOID lpParam)
         }
 
         Sleep(10);
-        g_bExit = TRUE;
+//        g_bExit = TRUE;
     }
 
     return 0;
@@ -125,7 +125,7 @@ DWORD __stdcall PostThread(LPVOID lpParam)
 //          int x=0;
         }
 
-//        Sleep(10);
+        Sleep(10);
 //        g_bExit = TRUE;
     }
 
@@ -178,7 +178,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 //    TestRequestAndReply(pNamedPipeClient);
 
-    HANDLE hThread = CreateThread(NULL, 0, PostThread, pNamedPipeClient, 0, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, SendThread, pNamedPipeClient, 0, NULL);
 
     _getch();
 

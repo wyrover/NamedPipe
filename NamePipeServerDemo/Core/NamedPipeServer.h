@@ -5,7 +5,6 @@
 #pragma once
 #include "IIPCInterface.h"
 #include <map>
-#include "OverlappedPool.h"
 
 class CNamedPipeServer : public IIPCObject , public IIPCEvent , public IIPCConnectorIterator
 {
@@ -53,7 +52,7 @@ protected:
 
     BOOL WaitPipeConnection();
 
-    BOOL CloseConnection(HANDLE hCom);
+    BOOL CloseConnection(IIPCConnector* pConnector);
 
     void CreateConnection(HANDLE hCom);
 
@@ -63,7 +62,7 @@ protected:
 
     IIPCConnector* FindClient(HANDLE hPort);
 
-    void HandleRequest(HANDLE hCom);
+	LPIPC_DATA_PACKAGE CreateOverlapped(IPC_MESSAGE_TYPE messageType);
 
     friend class CNamedPipeConnector;
 
@@ -103,13 +102,11 @@ public:
 
     virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize);
 
-    BOOL GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen);
+//    BOOL GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen);
 
     friend class CNamedPipeServer;
 
 private:
-
-    OVERLAPPED_PACKAGE m_DataPackage;
 
     HANDLE m_hCom;
 
@@ -117,11 +114,9 @@ private:
 
     IIPCEvent* m_pEventSensor;
 
-    DWORD m_dwPID;
-
     TCHAR m_sName[MAX_PATH];
 
-//  COverlappedPool* m_pOverlappedPool;
+	IPC_DATA_PACKAGE m_recvPackage;
 
 };
 

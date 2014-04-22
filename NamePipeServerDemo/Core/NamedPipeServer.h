@@ -53,9 +53,9 @@ protected:
 
     BOOL WaitPipeConnection();
 
-    BOOL CloseConnection(PCLIENT pClient);
+    BOOL CloseConnection(HANDLE hCom);
 
-    void CreateConnection(PCLIENT pClient);
+    void CreateConnection(HANDLE hCom);
 
     void AddClient(HANDLE hPort, IIPCConnector* pClient);
 
@@ -63,9 +63,9 @@ protected:
 
     IIPCConnector* FindClient(HANDLE hPort);
 
-    void HandleRequest(PCLIENT pClient);
+    void HandleRequest(HANDLE hCom);
 
-	friend class CNamedPipeConnector;
+    friend class CNamedPipeConnector;
 
 private:
 
@@ -81,13 +81,13 @@ private:
 
     ConnectorMap::const_iterator m_citCurrent;
 
-	COverlappedPool m_overlappedPool;
+//  COverlappedPool m_overlappedPool;
 };
 
 class CNamedPipeConnector : public IIPCConnector
 {
 public:
-    CNamedPipeConnector(PCLIENT pClient, IIPCObject* pServer, IIPCEvent* pEvent);
+    CNamedPipeConnector(HANDLE hCom, IIPCObject* pServer, IIPCEvent* pEvent);
 
     virtual ~CNamedPipeConnector();
 
@@ -109,7 +109,9 @@ public:
 
 private:
 
-    PCLIENT m_pClient;
+    OVERLAPPED_PACKAGE m_DataPackage;
+
+    HANDLE m_hCom;
 
     IIPCObject* m_pServer;
 
@@ -119,7 +121,7 @@ private:
 
     TCHAR m_sName[MAX_PATH];
 
-	COverlappedPool* m_pOverlappedPool;
+//  COverlappedPool* m_pOverlappedPool;
 
 };
 

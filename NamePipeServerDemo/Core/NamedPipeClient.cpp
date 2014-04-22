@@ -6,7 +6,9 @@ CNamedPipeClient::CNamedPipeClient(IIPCEvent* pEvent): m_pEventSensor(pEvent)
     , m_hPipe(INVALID_HANDLE_VALUE)
     , m_hRecvThread(NULL)
 {
-
+    ZeroMemory(&m_DataPackage, sizeof(OVERLAPPED_PACKAGE));
+    m_DataPackage.dwStatus = NAMED_PIPE_CONNECT;
+    m_DataPackage.ovHeader.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 }
 
 
@@ -17,22 +19,6 @@ CNamedPipeClient::~CNamedPipeClient(void)
 
 BOOL CNamedPipeClient::Create(LPCTSTR lpPipeName)
 {
-    ZeroMemory(&m_ovRead, sizeof(OVERLAPPED));
-    HANDLE hReadEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-
-    if(NULL == hReadEvent)
-        return FALSE;
-
-    m_ovRead.hEvent = hReadEvent;
-
-    ZeroMemory(&m_ovWrite, sizeof(OVERLAPPED));
-    HANDLE hWriteEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-
-    if(NULL == hWriteEvent)
-        return FALSE;
-
-    m_ovWrite.hEvent = hWriteEvent;
-
     TCHAR sPipeName[MAX_PATH] = {0};
     _tcscpy_s(sPipeName, MAX_PATH, _T("\\\\.\\pipe\\"));
     _tcscat_s(sPipeName, lpPipeName);
@@ -85,18 +71,6 @@ void CNamedPipeClient::Close()
         WaitForSingleObject(m_hRecvThread, INFINITE);
         CloseHandle(m_hRecvThread);
         m_hRecvThread = NULL;
-    }
-
-    if(NULL != m_ovRead.hEvent)
-    {
-        CloseHandle(m_ovRead.hEvent);
-        m_ovRead.hEvent = NULL;
-    }
-
-    if(NULL != m_ovWrite.hEvent)
-    {
-        CloseHandle(m_ovWrite.hEvent);
-        m_ovWrite.hEvent = NULL;
     }
 }
 
@@ -152,40 +126,41 @@ DWORD __stdcall CNamedPipeClient::_RecvThreadProc(LPVOID lpParam)
 
 DWORD CNamedPipeClient::_RecvThread()
 {
-    NAMED_PIPE_MESSAGE message;
     DWORD dwReaded = 0;
     BOOL bSucess = FALSE;
 
     while(TRUE)
     {
-        dwReaded = 0;
+        DWORD dwRet = WaitForSingleObject(m_DataPackage.ovHeader.hEvent, INFINITE);
 
-        HANDLE hEvent = m_ovRead.hEvent;
-        ZeroMemory(&m_ovRead, sizeof(OVERLAPPED));
-        m_ovRead.hEvent = hEvent;
-
-        ZeroMemory(&message, sizeof(message));
-
-        bSucess = ReadFile(m_hPipe, &message, sizeof(message), &dwReaded, &m_ovRead);
-
-        if(!bSucess)
+        if(dwRet == WAIT_OBJECT_0)
         {
-            if(GetLastError() == ERROR_IO_PENDING)
+            if(m_DataPackage.dwStatus == NAMED_PIPE_WRIEING)
             {
-                if(!GetOverlappedResult(m_hPipe, &m_ovRead, &dwReaded, INFINITE))
-                    break;
-                else
+                bSucess = WriteFile(m_hPipe, &m_DataPackage, sizeof(OVERLAPPED_PACKAGE), &dwReaded, &m_DataPackage.ovHeader);
+                ResetEvent(m_DataPackage.ovHeader.hEvent);
+
+                if(!bSucess && GetLastError() == ERROR_IO_PENDING)
                 {
-                    OnRecv(this, this, message.szRequest, message.dwRequestLen);
+
                 }
+
+                m_DataPackage.dwStatus = NAMED_PIPE_READING;
             }
-            else if(GetLastError() == ERROR_BROKEN_PIPE)
+
+            else if(m_DataPackage.dwStatus == NAMED_PIPE_READING)
             {
-                break;
+                bSucess = WriteFile(m_hPipe, &m_DataPackage, sizeof(OVERLAPPED_PACKAGE), &dwReaded, &m_DataPackage.ovHeader);
+                ResetEvent(m_DataPackage.ovHeader.hEvent);
+
+                if(!bSucess && GetLastError() == ERROR_IO_PENDING)
+                {
+
+                }
+
+                m_DataPackage.dwStatus = NAMED_PIPE_WRIEING;
             }
         }
-        else
-            OnRecv(this, this, message.szRequest, message.dwRequestLen);
     }
 
     return 0;
@@ -214,21 +189,17 @@ BOOL CNamedPipeClient::SendMessage(LPCVOID lpBuf, DWORD dwBufSize)
 
 BOOL CNamedPipeClient::PostMessage(LPCVOID lpBuf, DWORD dwBufSize)
 {
-    if(NULL == m_hPipe)
-        return FALSE;
-
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnSend(this, this, (LPVOID)lpBuf, dwBufSize);
-
-    DWORD dwWrited = 0;
-    HANDLE hEvent = m_ovWrite.hEvent;
-    ZeroMemory(&m_ovWrite, sizeof(OVERLAPPED));
-    m_ovWrite.hEvent = hEvent;
-
-    NAMED_PIPE_MESSAGE message;
-    GenericMessage(&message, lpBuf, dwBufSize);
-    BOOL bSucess =::WriteFile(m_hPipe, &message, message.dwTotalSize , &dwWrited, &m_ovWrite);
-    return ((bSucess) || (GetLastError() == ERROR_IO_PENDING));
+    m_DataPackage.bAsync = TRUE;
+    m_DataPackage.bUsed = TRUE;
+    m_DataPackage.dwProcessID = GetCurrentProcessId();
+    m_DataPackage.dwReplySize = dwBufSize;
+    memcpy_s(m_DataPackage.lpReply, SYELOG_MAXIMUM_MESSAGE, lpBuf, dwBufSize);
+    GetSystemTimeAsFileTime(&m_DataPackage.ftOccurance);
+    m_DataPackage.dwStatus = NAMED_PIPE_WRIEING;
+    m_DataPackage.dwTotalSize = sizeof(OVERLAPPED_PACKAGE) - SYELOG_MAXIMUM_MESSAGE * 2 + dwBufSize;
+    m_DataPackage.hCom = m_hPipe;
+    SetEvent(m_DataPackage.ovHeader.hEvent);
+    return TRUE;
 }
 
 IIPCConnectorIterator* CNamedPipeClient::GetClients()

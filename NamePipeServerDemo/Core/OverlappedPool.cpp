@@ -19,17 +19,19 @@ void COverlappedPool::Create(DWORD dwSize /*= 20*/)
     if(dwSize <= 0)
         return ;
 
-    LPOVERLAPPED_ITEM lpOvItem = new OVERLAPPED_ITEM[dwSize];
-    m_pEventHandleArr = new HANDLE[dwSize];
+    LPOVERLAPPED_PACKAGE lpOvItem = new OVERLAPPED_PACKAGE[dwSize];
+    //m_pEventHandleArr = new HANDLE[dwSize];
 
     for(DWORD i = 0; i < dwSize; i++)
     {
-        ZeroMemory(&lpOvItem[i].ov, sizeof(OVERLAPPED));
-        lpOvItem[i].ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-        lpOvItem[i].bUsed = FALSE;
+        ZeroMemory(&lpOvItem[i], sizeof(OVERLAPPED_PACKAGE));
+        lpOvItem[i].ovHeader.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+        lpOvItem[i].dwProcessID = GetCurrentProcessId();
+        GetSystemTimeAsFileTime(&lpOvItem[i].ftOccurance);
+        lpOvItem[i].dwStatus = NAMED_PIPE_CONNECT;
         m_vecOvItem.push_back(&lpOvItem[i]);
 
-        m_pEventHandleArr[i] = lpOvItem[i].ov.hEvent;
+        //m_pEventHandleArr[i] = lpOvItem[i].ov.hEvent;
     }
 }
 
@@ -40,34 +42,41 @@ void COverlappedPool::Close()
 
     for(DWORD i = 0; i < dwPoolSize; i++)
     {
-        LPOVERLAPPED_ITEM lpOvItem = m_vecOvItem[i];
+        LPOVERLAPPED_PACKAGE lpOvItem = m_vecOvItem[i];
 
-        if(NULL != lpOvItem && FALSE == lpOvItem->bUsed)
+        if(NULL != lpOvItem)
         {
-//            SetEvent(lpOvItem->ov.hEvent);
-            WaitForSingleObject(lpOvItem->ov.hEvent, INFINITE);
-            CloseHandle(lpOvItem->ov.hEvent);
+            SetEvent(lpOvItem->ovHeader.hEvent);
+            WaitForSingleObject(lpOvItem->ovHeader.hEvent, INFINITE);
+            CloseHandle(lpOvItem->ovHeader.hEvent);
+            lpOvItem->ovHeader.hEvent = NULL;
+            delete lpOvItem;
+            lpOvItem = NULL;
         }
     }
 
-    delete[] m_pEventHandleArr;
-    m_pEventHandleArr = NULL;
+    m_vecOvItem.clear();
+
+//     delete[] m_pEventHandleArr;
+//     m_pEventHandleArr = NULL;
     LeaveCriticalSection(&m_cslock);
 }
 
-LPOVERLAPPED COverlappedPool::Alloc()
+LPOVERLAPPED_PACKAGE COverlappedPool::Alloc()
 {
-    LPOVERLAPPED_ITEM itemNotUsed = NULL;
+    LPOVERLAPPED_PACKAGE itemNotUsed = NULL;
     EnterCriticalSection(&m_cslock);
     DWORD dwPoolSize = m_vecOvItem.size();
 
     for(DWORD i = 0; i < dwPoolSize; i++)
     {
-        LPOVERLAPPED_ITEM lpOvItem = m_vecOvItem[i];
+        LPOVERLAPPED_PACKAGE lpOvItem = m_vecOvItem[i];
 
         if((NULL != lpOvItem) && (FALSE == lpOvItem->bUsed))
         {
-//            ResetEvent(lpOvItem->ov.hEvent);
+            if(NULL != lpOvItem->ovHeader.hEvent)
+                ResetEvent(lpOvItem->ovHeader.hEvent);
+
             lpOvItem->bUsed = TRUE;
             itemNotUsed = lpOvItem;
             break;
@@ -75,50 +84,52 @@ LPOVERLAPPED COverlappedPool::Alloc()
     }
 
     LeaveCriticalSection(&m_cslock);
-    return &itemNotUsed->ov;
+    return itemNotUsed;
 }
 
-void COverlappedPool::Release(LPOVERLAPPED lpo)
+void COverlappedPool::Release(LPOVERLAPPED_PACKAGE lpo)
 {
     EnterCriticalSection(&m_cslock);
-    LPOVERLAPPED_ITEM lpItem = FindItemByOv(lpo);
-    assert(lpItem->bUsed);
+    assert(lpo->bUsed);
 
-    if((NULL != lpItem) && (TRUE == lpItem->bUsed))
+    if((NULL != lpo) && (TRUE == lpo->bUsed))
     {
-//        SetEvent(lpItem->ov.hEvent);
-        lpItem->bUsed = FALSE;
+        if(NULL != lpo->ovHeader.hEvent)
+            SetEvent(lpo->ovHeader.hEvent);
+
+        lpo->bUsed = FALSE;
     }
 
     LeaveCriticalSection(&m_cslock);
 }
 
-COverlappedPool::LPOVERLAPPED_ITEM COverlappedPool::FindItemByOv(LPOVERLAPPED lpo)
-{
-    LPOVERLAPPED_ITEM pFindItem = NULL;
-    EnterCriticalSection(&m_cslock);
-    DWORD dwPoolSize = m_vecOvItem.size();
-
-    for(DWORD i = 0; i < dwPoolSize; i++)
-    {
-        LPOVERLAPPED_ITEM lpOvItem = m_vecOvItem[i];
-
-        if(NULL == lpOvItem)
-            continue;
-
-        if(lpOvItem->ov.hEvent == lpo->hEvent)
-        {
-            pFindItem = lpOvItem;
-            break;
-        }
-    }
-
-    LeaveCriticalSection(&m_cslock);
-    return pFindItem;
-}
+// LPOVERLAPPED_PACKAGE COverlappedPool::FindItemByOv(LPOVERLAPPED lpo)
+// {
+//     LPOVERLAPPED_PACKAGE pFindItem = NULL;
+//     EnterCriticalSection(&m_cslock);
+//     DWORD dwPoolSize = m_vecOvItem.size();
+//
+//     for(DWORD i = 0; i < dwPoolSize; i++)
+//     {
+//         LPOVERLAPPED_PACKAGE lpOvItem = m_vecOvItem[i];
+//
+//         if(NULL == lpOvItem)
+//             continue;
+//
+//         if(lpOvItem->ovHeader.hEvent == lpo->hEvent)
+//         {
+//             pFindItem = lpOvItem;
+//             break;
+//         }
+//     }
+//
+//     LeaveCriticalSection(&m_cslock);
+//     return pFindItem;
+// }
 
 DWORD COverlappedPool::WaitAll(BOOL bWait, DWORD dwTimeout)
 {
-    DWORD dwVecSize = m_vecOvItem.size();
-    return WaitForMultipleObjects(dwVecSize, m_pEventHandleArr, TRUE, dwTimeout);
+    //DWORD dwVecSize = m_vecOvItem.size();
+    //return WaitForMultipleObjects(dwVecSize, m_pEventHandleArr, TRUE, dwTimeout);
+    return 0;
 }

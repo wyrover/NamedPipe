@@ -126,7 +126,7 @@ DWORD __stdcall PostThread(LPVOID lpParam)
         }
 
 //        Sleep(10);
-        g_bExit = TRUE;
+//        g_bExit = TRUE;
     }
 
     return 0;
@@ -176,15 +176,15 @@ int _tmain(int argc, _TCHAR* argv[])
     if(!pNamedPipeClient->Create(_T("NamedPipeServer")))
         return -1;
 
-    TestRequestAndReply(pNamedPipeClient);
+//    TestRequestAndReply(pNamedPipeClient);
 
-//    HANDLE hThread = CreateThread(NULL, 0, SendThread, pNamedPipeClient, 0, NULL);
+    HANDLE hThread = CreateThread(NULL, 0, PostThread, pNamedPipeClient, 0, NULL);
 
     _getch();
 
-//      g_bExit = TRUE;
-//      WaitForSingleObject(hThread, INFINITE);
-//      CloseHandle(hThread);
+     g_bExit = TRUE;
+     WaitForSingleObject(hThread, INFINITE);
+     CloseHandle(hThread);
 
     pNamedPipeClient->Close();
     delete pNamedPipeClient;

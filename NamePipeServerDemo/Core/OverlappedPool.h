@@ -1,33 +1,29 @@
 #pragma once
 #include <windows.h>
 #include <vector>
+#include "IIPCInterface.h"
 
 class COverlappedPool
 {
 public:
-    typedef struct _OVERLAPPED_ITEM
-    {
-        OVERLAPPED ov;
-        BOOL bUsed;
-    } OVERLAPPED_ITEM, *LPOVERLAPPED_ITEM;
 
-	typedef std::vector<LPOVERLAPPED_ITEM> ovItemVector;
+    typedef std::vector<LPOVERLAPPED_PACKAGE> ovItemVector;
 
     COverlappedPool(void);
     virtual ~COverlappedPool(void);
 
     void Create(DWORD dwSize = 20);
     void Close();
-    LPOVERLAPPED Alloc();
-    void Release(LPOVERLAPPED lpo);
-	DWORD WaitAll(BOOL bWait,DWORD dwTimeout);
+    LPOVERLAPPED_PACKAGE Alloc();
+    void Release(LPOVERLAPPED_PACKAGE lpo);
+    DWORD WaitAll(BOOL bWait, DWORD dwTimeout);
 
-protected:
-	LPOVERLAPPED_ITEM FindItemByOv(LPOVERLAPPED lpo);
+// protected:
+//  LPOVERLAPPED_PACKAGE FindItemByOv(LPOVERLAPPED lpo);
 
 private:
-	ovItemVector m_vecOvItem;
-	CRITICAL_SECTION m_cslock;
-	HANDLE* m_pEventHandleArr;
+    ovItemVector m_vecOvItem;
+    CRITICAL_SECTION m_cslock;
+//  HANDLE* m_pEventHandleArr;
 };
 

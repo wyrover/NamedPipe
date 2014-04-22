@@ -10,7 +10,6 @@ CNamedPipeServer::CNamedPipeServer(IIPCEvent* pEvent): m_pEventHandler(pEvent)
 {
     m_sNamedPipe[MAX_PATH - 1] = _T('\0');
     InitializeCriticalSection(&m_csConnnectorMap);
-    m_overlappedPool.Create();
 }
 
 
@@ -23,7 +22,6 @@ CNamedPipeServer::~CNamedPipeServer(void)
     }
 
     DeleteCriticalSection(&m_csConnnectorMap);
-    m_overlappedPool.Close();
 }
 
 BOOL CNamedPipeServer::Create(LPCTSTR lpPipeName)
@@ -93,17 +91,16 @@ DWORD __stdcall CNamedPipeServer::_IOCPThreadProc(LPVOID lpParam)
 
 DWORD CNamedPipeServer::_IOCPThread()
 {
-    PCLIENT pClient;
+    HANDLE handle = NULL;
     BOOL b;
     LPOVERLAPPED lpo;
     DWORD nBytes;
 
     for(BOOL fKeepLooping = TRUE; fKeepLooping;)
     {
-        pClient = NULL;
         lpo = NULL;
         nBytes = 0;
-        b = GetQueuedCompletionStatus(m_hCompletionPort, &nBytes, (PULONG_PTR)&pClient, &lpo, INFINITE);
+        b = GetQueuedCompletionStatus(m_hCompletionPort, &nBytes, (PULONG_PTR)&handle, &lpo, INFINITE);
 
         if(!b && lpo == NULL)
         {
@@ -116,87 +113,89 @@ DWORD CNamedPipeServer::_IOCPThread()
             {
                 if(NULL == lpo)
                 {
-                    CloseConnection(pClient);
-                    pClient = NULL;
+                    CloseConnection(handle);
                     continue;
                 }
             }
         }
 
-        m_overlappedPool.Release(lpo);
-
-        if(pClient->emPipeStatus == NAMED_PIPE_CONNECT)
-        {
-            CreateConnection(pClient);
-
-            pClient->emPipeStatus = NAMED_PIPE_READING;
-            LPOVERLAPPED lpov = m_overlappedPool.Alloc();
-            b = ReadFile(pClient->hPipe, &pClient->replyMessage, sizeof(pClient->replyMessage), NULL, lpov);
-
-            if(!b)
-            {
-                if(GetLastError() != ERROR_IO_PENDING)
-                {
-//                  m_overlappedPool.Release(lpo);
-                    continue;
-                }
-            }
-
-            WaitPipeConnection();
-//            m_overlappedPool.Release(lpo);
-            continue;
-        }
-        else if(pClient->emPipeStatus == NAMED_PIPE_WRIEING)
-        {
-            HandleRequest(pClient);
-            LPOVERLAPPED lpov = m_overlappedPool.Alloc();
-            b = ReadFile(pClient->hPipe, &pClient->replyMessage, sizeof(pClient->replyMessage), NULL, lpov);
-
-            if(!b && GetLastError() == ERROR_BROKEN_PIPE)
-                CloseConnection(pClient);
-
-            pClient->emPipeStatus = NAMED_PIPE_READING;
-        }
-        else if(pClient->emPipeStatus == NAMED_PIPE_READING)
-        {
-            HandleRequest(pClient);
-            LPOVERLAPPED lpov = m_overlappedPool.Alloc();
-            b = WriteFile(pClient->hPipe, &pClient->requestMessage, sizeof(pClient->requestMessage), NULL, lpov);
-
-            if(!b && GetLastError() == ERROR_BROKEN_PIPE)
-                CloseConnection(pClient);
-
-            pClient->emPipeStatus = NAMED_PIPE_WRIEING;
-        }
-        else if(pClient->emPipeStatus == NAMED_PIPE_DISCONNECT)
-        {
-            CloseConnection(pClient);
-        }
-
-//      m_overlappedPool.Release(lpo);
+        HandleRequest(handle);
     }
 
     return 0;
 }
 
-void CNamedPipeServer::HandleRequest(PCLIENT pClient)
+void CNamedPipeServer::HandleRequest(HANDLE hCom)
 {
-    IIPCConnector* pConnector = FindClient(pClient->hPipe);
+    CNamedPipeConnector* pConnector = dynamic_cast<CNamedPipeConnector*>(FindClient(hCom));
 
-    if(NULL != pConnector)
+    if(NULL == pConnector)
+        return ;
+
+    LPOVERLAPPED_PACKAGE lpOvPackage = &pConnector->m_DataPackage;
+
+    if(INVALID_HANDLE_VALUE == hCom || NULL == lpOvPackage)
+        return ;
+
+    BOOL b = FALSE;
+
+    switch(lpOvPackage->dwStatus)
     {
-        CNamedPipeConnector* pNamedPipeConnector = dynamic_cast<CNamedPipeConnector*>(pConnector);
+        case NAMED_PIPE_CONNECT:
+        {
+            OnConnect(this, pConnector);
+            WaitPipeConnection();
 
-        if(NULL != pNamedPipeConnector)
-            pNamedPipeConnector->m_dwPID = pClient->replyMessage.nProcessId;
+            b = ReadFile(hCom, lpOvPackage, sizeof(OVERLAPPED_PACKAGE), NULL, &lpOvPackage->ovHeader);
 
-        OnRecv(this, pConnector, &pClient->replyMessage.szRequest, pClient->replyMessage.dwRequestLen);
+            if(!b)
+            {
+                if(GetLastError() != ERROR_IO_PENDING)
+                    break;
+            }
+
+            lpOvPackage->dwStatus = NAMED_PIPE_READING;
+            break;
+        }
+
+        case NAMED_PIPE_DISCONNECT:
+        {
+            CloseConnection(hCom);
+            break;
+        }
+
+        case NAMED_PIPE_READING:
+        {
+            OnRecv(this, pConnector, lpOvPackage->lpReply, lpOvPackage->dwReplySize);
+
+            if(NULL != pConnector->m_DataPackage.lpReply)
+                b = WriteFile(hCom, lpOvPackage, sizeof(OVERLAPPED_PACKAGE), NULL, &lpOvPackage->ovHeader);
+
+            if(!b && GetLastError() == ERROR_BROKEN_PIPE)
+                CloseConnection(hCom);
+
+            lpOvPackage->dwStatus = NAMED_PIPE_WRIEING;
+            break;
+        }
+
+        case NAMED_PIPE_WRIEING:
+        {
+            b = ReadFile(hCom, lpOvPackage, sizeof(OVERLAPPED_PACKAGE), NULL, &lpOvPackage->ovHeader);
+
+            if(!b && GetLastError() == ERROR_BROKEN_PIPE)
+                CloseConnection(hCom);
+
+            lpOvPackage->dwStatus = NAMED_PIPE_READING;
+            break;
+        }
+
+        default:
+            break;
     }
 }
 
 BOOL CNamedPipeServer::WaitPipeConnection()
 {
-    PCLIENT pClient = NULL;
     BOOL bSuccess = FALSE;
 
     do
@@ -208,23 +207,13 @@ BOOL CNamedPipeServer::WaitPipeConnection()
         if(hPipe == INVALID_HANDLE_VALUE)
             break;
 
-        PCLIENT pClient = new CLIENT;
-
-        if(pClient == NULL)
+        if(NULL == CreateIoCompletionPort(hPipe, m_hCompletionPort, (ULONG_PTR)hPipe, 0))
             break;
 
-        pClient->hPipe = hPipe;
-        pClient->emPipeStatus = NAMED_PIPE_CONNECT;
+        CNamedPipeConnector* pConnector = new CNamedPipeConnector(hPipe, this, m_pEventHandler);
+        AddClient(hPipe, pConnector);
 
-        if(NULL == CreateIoCompletionPort(hPipe, m_hCompletionPort, (ULONG_PTR)pClient, 0))
-            break;
-
-        LPOVERLAPPED lpOv = m_overlappedPool.Alloc();
-
-        if(NULL == lpOv)
-            return FALSE;
-
-        if(!ConnectNamedPipe(hPipe, lpOv))
+        if(!ConnectNamedPipe(hPipe, &pConnector->m_DataPackage.ovHeader))
         {
             if(GetLastError() != ERROR_IO_PENDING && GetLastError() != ERROR_PIPE_LISTENING)
                 break;
@@ -234,43 +223,24 @@ BOOL CNamedPipeServer::WaitPipeConnection()
     }
     while(FALSE);
 
-    if(!bSuccess)
-    {
-        if(NULL != pClient)
-        {
-            delete pClient;
-            pClient = NULL;
-        }
-    }
-
     return bSuccess;
 }
 
-BOOL CNamedPipeServer::CloseConnection(PCLIENT pClient)
+BOOL CNamedPipeServer::CloseConnection(HANDLE hCom)
 {
-    IIPCConnector* pConnector = FindClient(pClient->hPipe);
+    if(NULL == hCom)
+        return TRUE;
+
+    FlushFileBuffers(hCom);
+    DisconnectNamedPipe(hCom);
+    IIPCConnector* pConnector = FindClient(hCom);
 
     if(NULL != pConnector)
-    {
-        if(pClient != NULL)
-        {
-            if(pClient->hPipe != INVALID_HANDLE_VALUE)
-            {
-                FlushFileBuffers(pClient->hPipe);
-                DisconnectNamedPipe(pClient->hPipe);
+        OnDisConnect(this, pConnector);
 
-                pClient->emPipeStatus = NAMED_PIPE_DISCONNECT;
-                OnDisConnect(this, pConnector);
-                RemoveClient(pClient->hPipe);
-                CloseHandle(pClient->hPipe);
-                pClient->hPipe = NULL;
-                pClient->hPipe = INVALID_HANDLE_VALUE;
-            }
-
-            delete pClient;
-            pClient = NULL;
-        }
-    }
+    RemoveClient(hCom);
+    CloseHandle(hCom);
+    hCom = INVALID_HANDLE_VALUE;
 
     return TRUE;
 }
@@ -401,46 +371,29 @@ IIPCConnectorIterator* CNamedPipeServer::GetClients()
     return this;
 }
 
-void CNamedPipeServer::CreateConnection(PCLIENT pClient)
+void CNamedPipeServer::CreateConnection(HANDLE hCom)
 {
-    IIPCConnector* pConnector = new CNamedPipeConnector(pClient, this, m_pEventHandler);
-    AddClient(pClient->hPipe, pConnector);
-    OnConnect(this, pConnector);
+
 }
 
 BOOL CNamedPipeConnector::SendMessage(LPCVOID lpBuf, DWORD dwBufSize)
 {
-    if(NULL == m_pClient)
-        return FALSE;
-
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnSend(m_pServer, this, (LPVOID)lpBuf, dwBufSize);
-
-    DWORD dwWrited = 0;
-    NAMED_PIPE_MESSAGE message;
-    GenericMessage(&message, lpBuf, dwBufSize);
-    BOOL bSucess =::WriteFile(m_pClient->hPipe, &message, message.dwTotalSize , &dwWrited, NULL);
-
-    return bSucess;
+    ZeroMemory(&m_DataPackage, sizeof(OVERLAPPED_PACKAGE));
+    m_DataPackage.bAsync = TRUE;
+    m_DataPackage.bUsed = TRUE;
+    m_DataPackage.dwProcessID = GetCurrentProcessId();
+    m_DataPackage.dwReplySize = dwBufSize;
+    memcpy_s(m_DataPackage.lpReply, SYELOG_MAXIMUM_MESSAGE, lpBuf, dwBufSize);
+    GetSystemTimeAsFileTime(&m_DataPackage.ftOccurance);
+    m_DataPackage.dwStatus = NAMED_PIPE_WRIEING;
+    m_DataPackage.dwTotalSize = sizeof(OVERLAPPED_PACKAGE) - SYELOG_MAXIMUM_MESSAGE * 2 + dwBufSize;
+    m_DataPackage.hCom = m_hCom;
+    return TRUE;
 }
 
 BOOL CNamedPipeConnector::PostMessage(LPCVOID lpBuf, DWORD dwBufSize)
 {
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnSend(m_pServer, this, (LPVOID)lpBuf, dwBufSize);
-
-//     DWORD dwWrited = 0;
-//     NAMED_PIPE_MESSAGE message;
-//     GenericMessage(&message, lpBuf, dwBufSize);
-//     LPOVERLAPPED lpOv = m_pOverlappedPool->Alloc();
-//     BOOL bSucess =::WriteFile(m_pClient->hPipe, &message, message.dwTotalSize , &dwWrited, lpOv);
-//     return ((bSucess) || (GetLastError() == ERROR_IO_PENDING));
-
-//    m_pClient->emPipeStatus = NAMED_PIPE_WRIEING;
-    GenericMessage(&m_pClient->requestMessage, lpBuf, dwBufSize);
-    return TRUE;
-
-//    return SendMessage(lpBuf, dwBufSize);
+    return FALSE;
 }
 
 BOOL CNamedPipeConnector::GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen)
@@ -457,32 +410,30 @@ BOOL CNamedPipeConnector::GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID l
     return TRUE;
 }
 
-CNamedPipeConnector::CNamedPipeConnector(PCLIENT pClient, IIPCObject* pServer, IIPCEvent* pEvent): m_pClient(pClient), m_pServer(pServer), m_pEventSensor(pEvent)
+CNamedPipeConnector::CNamedPipeConnector(HANDLE hCom, IIPCObject* pServer, IIPCEvent* pEvent): m_hCom(hCom), m_pServer(pServer), m_pEventSensor(pEvent)
 {
     CNamedPipeServer* aServer = dynamic_cast<CNamedPipeServer*>(pServer);
-
-    if(NULL != aServer)
-    {
-        m_pOverlappedPool = &aServer->m_overlappedPool;
-    }
+    ZeroMemory(&m_DataPackage, sizeof(OVERLAPPED_PACKAGE));
+    m_DataPackage.ovHeader.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
 }
 
 CNamedPipeConnector::~CNamedPipeConnector()
 {
-
+    if(NULL != m_DataPackage.ovHeader.hEvent)
+    {
+        CloseHandle(m_DataPackage.ovHeader.hEvent);
+        m_DataPackage.ovHeader.hEvent = NULL;
+    }
 }
 
 HANDLE CNamedPipeConnector::GetHandle()
 {
-    if(NULL != m_pClient)
-        return m_pClient->hPipe;
-
-    return NULL;
+    return m_hCom;
 }
 
 BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize)
 {
-    if(NULL == m_pClient)
+    if(NULL == m_hCom)
         return FALSE;
 
     NAMED_PIPE_MESSAGE requestMessage;
@@ -490,14 +441,13 @@ BOOL CNamedPipeConnector::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize,
     NAMED_PIPE_MESSAGE replyMessage;
     replyMessage.dwTotalSize = sizeof(NAMED_PIPE_MESSAGE);
 
-    LPOVERLAPPED lpOv = m_pOverlappedPool->Alloc();
-    BOOL bSucess = TransactNamedPipe(m_pClient->hPipe, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, lpOv);
+    BOOL bSucess = TransactNamedPipe(m_hCom, &requestMessage, requestMessage.dwTotalSize, &replyMessage, replyMessage.dwTotalSize, dwTransactSize, &m_DataPackage.ovHeader);
 
     if(!bSucess)
     {
         if(GetLastError() == ERROR_IO_PENDING)
         {
-            if(GetOverlappedResult(m_pClient->hPipe, lpOv, dwTransactSize, TRUE))
+            if(GetOverlappedResult(m_hCom, &m_DataPackage.ovHeader, dwTransactSize, TRUE))
                 bSucess = TRUE;
         }
     }

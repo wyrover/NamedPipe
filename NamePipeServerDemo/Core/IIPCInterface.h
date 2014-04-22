@@ -2,7 +2,7 @@
 #include <windows.h>
 #include <map>
 
-enum NAMEDPIPE_STATUS
+enum OVERLAPPED_STATUS
 {
     NAMED_PIPE_CONNECT,
     NAMED_PIPE_READING,
@@ -35,21 +35,38 @@ typedef struct _SYELOG_MESSAGE
 
 } NAMED_PIPE_MESSAGE, *PSYELOG_MESSAGE;
 
-typedef struct _CLIENT: OVERLAPPED
+// typedef struct _CLIENT: OVERLAPPED
+// {
+//     _CLIENT()
+//     {
+//         hPipe = NULL;
+//         emPipeStatus = NAMED_PIPE_CONNECT;
+//         ZeroMemory(&replyMessage, sizeof(NAMED_PIPE_MESSAGE));
+//     }
+//
+//     HANDLE              hPipe;
+//     OVERLAPPED_STATUS    emPipeStatus;
+//     NAMED_PIPE_MESSAGE  requestMessage;
+//  NAMED_PIPE_MESSAGE  replyMessage;
+//
+// } CLIENT, *PCLIENT;
+
+typedef struct _OVERLAPPED_PACKAGE
 {
-    _CLIENT()
-    {
-        hPipe = NULL;
-        emPipeStatus = NAMED_PIPE_CONNECT;
-        ZeroMemory(&replyMessage, sizeof(NAMED_PIPE_MESSAGE));
-    }
+    OVERLAPPED ovHeader;                            // OVERLAPPED同步头
+    HANDLE hCom;                                    // 通信句柄
+    DWORD dwProcessID;                              // 当前进程ID
+    FILETIME ftOccurance;                           // 异步投递发生时间
+    DWORD dwRequestSize;                            // 用户携带请求数据量
+    BYTE lpRequestBuf[SYELOG_MAXIMUM_MESSAGE];      // 用户请求缓冲区
+    DWORD dwReplySize;                              // 用户回应数据量
+    BYTE lpReply[SYELOG_MAXIMUM_MESSAGE];           // 用户回应缓冲区
+    OVERLAPPED_STATUS dwStatus;                     // 当前异步投递状态
+    BOOL bUsed;                                     // 当前是否正在被使用
+    BOOL bAsync;                                    // 是同步请求还是异步请求
+    DWORD dwTotalSize;                              // 通信包整体大小
 
-    HANDLE              hPipe;
-    NAMEDPIPE_STATUS    emPipeStatus;
-    NAMED_PIPE_MESSAGE  requestMessage;
-	NAMED_PIPE_MESSAGE	replyMessage;
-
-} CLIENT, *PCLIENT;
+} OVERLAPPED_PACKAGE, *LPOVERLAPPED_PACKAGE;
 
 #define pure_virtual __declspec(novtable)
 

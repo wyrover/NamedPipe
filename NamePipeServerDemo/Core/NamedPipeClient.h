@@ -65,12 +65,14 @@ private:
 
     int m_iIterator;
 
-    OVERLAPPED m_ovRead;
-
-    OVERLAPPED m_ovWrite;
+//     OVERLAPPED m_ovRead;
+//
+//     OVERLAPPED m_ovWrite;
 
     DWORD m_dwPID;
 
     TCHAR m_sName[MAX_PATH];
+
+    OVERLAPPED_PACKAGE m_DataPackage;
 };
 

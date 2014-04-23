@@ -20,8 +20,8 @@ typedef struct _IPC_DATA_PACKAGE
     DWORD dwProcessID;                                      // 当前进程ID
     FILETIME ftOccurance;                                   // 异步投递发生时间
     DWORD dwDataSize;                                   // 用户回应数据量
-    BYTE lpData[SYELOG_MAXIMUM_MESSAGE];                // 用户回应缓冲区
-    BOOL bUsed;                                             // 是否正在被使用
+    TCHAR lpData[SYELOG_MAXIMUM_MESSAGE];                // 用户回应缓冲区
+    IPC_MESSAGE_TYPE msgType;                         // 消息类型
 
 } IPC_DATA_PACKAGE, *LPIPC_DATA_PACKAGE;
 
@@ -45,7 +45,6 @@ struct pure_virtual IIPCConnector
     virtual ~IIPCConnector() = 0 {};
     virtual DWORD GetSID() = 0;
     virtual LPCTSTR GetName() = 0;
-    virtual HANDLE GetHandle() = 0;
     virtual BOOL SendMessage(LPCVOID lpBuf, DWORD dwBufSize) = 0;
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize) = 0;
     virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize) = 0;

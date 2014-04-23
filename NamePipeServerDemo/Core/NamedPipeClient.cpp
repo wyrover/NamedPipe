@@ -185,9 +185,9 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
     m_sendPackage.emMessageType = IPC_MESSAGE_READ_WRITE;
     m_sendPackage.ipcDataPackage.dwProcessID = GetCurrentProcessId();
     m_sendPackage.ipcDataPackage.dwDataSize = dwSendBufSize;
-    memcpy_s(&m_sendPackage.ipcDataPackage.lpData, SYELOG_MAXIMUM_MESSAGE, lpSendBuf, dwSendBufSize);
-    m_sendPackage.ipcDataPackage.dwTotalSize = sizeof(IPC_DATA_OVERLAPPEDEX) - SYELOG_MAXIMUM_MESSAGE + dwSendBufSize;
-
+//    memcpy_s(m_sendPackage.ipcDataPackage.lpData, SYELOG_MAXIMUM_MESSAGE, lpSendBuf, dwSendBufSize);
+    m_sendPackage.ipcDataPackage.dwTotalSize = sizeof(IPC_DATA_PACKAGE);
+	m_sendPackage.ipcDataPackage.msgType=IPC_MESSAGE_READ_WRITE;
     m_recvPackage.emMessageType = IPC_MESSAGE_READ_WRITE;
     DWORD dwWrited = 0;
     BOOL bSucess = TransactNamedPipe(m_hPipe, &m_sendPackage.ipcDataPackage, m_sendPackage.ipcDataPackage.dwTotalSize, &m_recvPackage.ipcDataPackage, sizeof(IPC_DATA_PACKAGE), &dwWrited, &m_sendPackage);

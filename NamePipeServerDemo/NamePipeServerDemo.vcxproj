@@ -146,7 +146,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Core\IIPCInterface.h" />
+    <ClInclude Include="Core\IoCompletePort.h" />
     <ClInclude Include="Core\NamedPipeServer.h" />
+    <ClInclude Include="NamedPipeWrapper.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>

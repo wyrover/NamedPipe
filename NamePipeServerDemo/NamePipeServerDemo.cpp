@@ -50,8 +50,8 @@ public:
 // 
 //         _tprintf_s(_T("%s"), lpBuf);
 
-
-        TCHAR* sReply = _T("你好,客户端\r\n");
+		TCHAR sReply[MAX_PATH]={0};
+		_stprintf_s(sReply,_T("你好，客户端 %d\r\n"),pClient->GetSID());
         DWORD dwReplyLen = _tcslen(sReply) * sizeof(TCHAR);
         pClient->SendMessage(sReply, dwReplyLen);
 
@@ -120,25 +120,25 @@ int _tmain(int argc, _TCHAR* argv[])
 
     _getch();
 
-    TCHAR* sRequest = _T("你好,XXX\r\n");
-    DWORD dwRequestSize = (_tcslen(sRequest) + 1) * sizeof(TCHAR);
+//     TCHAR* sRequest = _T("你好,XXX\r\n");
+//     DWORD dwRequestSize = (_tcslen(sRequest) + 1) * sizeof(TCHAR);
+// 
+//     TCHAR sReply[MAX_PATH] = {0};
+//     DWORD dwReplySize = 0;
+//     DWORD dwTransSize = 0;
 
-    TCHAR sReply[MAX_PATH] = {0};
-    DWORD dwReplySize = 0;
-    DWORD dwTransSize = 0;
-
-    IIPCConnectorIterator* pClientIterator = pNamedPipeServer->GetClients();
-
-    for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
-    {
-        IIPCConnector* aClient = pClientIterator->GetCurrent();
-
-        if(NULL == aClient)
-            continue;
-
-        TCHAR* sReply = _T("Hello,Client\r\n");
-        aClient->RequestAndReply(sRequest, dwRequestSize, &sReply, MAX_PATH, &dwTransSize);
-    }
+//     IIPCConnectorIterator* pClientIterator = pNamedPipeServer->GetClients();
+// 
+//     for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
+//     {
+//         IIPCConnector* aClient = pClientIterator->GetCurrent();
+// 
+//         if(NULL == aClient)
+//             continue;
+// 
+//         TCHAR* sReply = _T("Hello,Client\r\n");
+//         aClient->RequestAndReply(sRequest, dwRequestSize, &sReply, MAX_PATH, &dwTransSize);
+//     }
 
     _getch();
 

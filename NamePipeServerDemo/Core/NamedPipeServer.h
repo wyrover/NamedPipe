@@ -1,125 +1,93 @@
-// ²Î¿¼ÎÄÕÂMSDN
-// I/O Completion Ports http://msdn.microsoft.com/en-us/library/windows/desktop/aa365198%28v=vs.85%29.aspx
-// Synchronous and Asynchronous I/O http://msdn.microsoft.com/en-us/library/windows/desktop/aa365683%28v=vs.85%29.aspx
-// Synchronization and Overlapped Input and Output http://msdn.microsoft.com/en-us/library/windows/desktop/ms686358%28v=vs.85%29.aspx
 #pragma once
 #include "IIPCInterface.h"
-#include <map>
+#include "..\NamedPipeWrapper.h"
+#include "IoCompletePort.h"
 
-class CNamedPipeServer : public IIPCObject , public IIPCEvent , public IIPCConnectorIterator
+class CNamedPipeServer: public IIPCObject,public IIPCConnectorIterator
 {
 public:
-    CNamedPipeServer(IIPCEvent* pEvent);
+	CNamedPipeServer(IIPCEvent* pEvent);
 
-    virtual ~CNamedPipeServer(void);
+	virtual ~CNamedPipeServer();
 
-    // IIPCObject
-    virtual BOOL Create(LPCTSTR lpPipeName);
+	virtual BOOL Create( LPCTSTR lpPipeName );
 
-    virtual void Close();
+	virtual void Close();
 
-    virtual IIPCConnectorIterator* GetClients();
+	virtual IIPCConnectorIterator* GetClients();
 
-    // IIPCEvent
-    virtual void OnConnect(IIPCObject* pServer, IIPCConnector* pClient);
+	virtual void Begin();
 
-    virtual void OnDisConnect(IIPCObject* pServer, IIPCConnector* pClient);
+	virtual BOOL End();
 
-    virtual void OnCreate(IIPCObject* pServer);
+	virtual void Next();
 
-    virtual void OnClose(IIPCObject* pServer);
-
-    virtual void OnRecv(IIPCObject* pServer, IIPCConnector* pClient, LPCVOID lpBuf, DWORD dwBufSize);
-
-    virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize);
-
-    // IIPCClientIterator
-    virtual void Begin();
-
-    virtual BOOL End();
-
-    virtual void Next();
-
-    virtual IIPCConnector* GetCurrent();
+	virtual IIPCConnector* GetCurrent();
 
 protected:
 
-    BOOL _CreateIOCPThreadPool(DWORD dwThreadNum);
+	void CheckExit();
 
-    static DWORD __stdcall _IOCPThreadProc(LPVOID lpParam);
+	static DWORD WINAPI IOCompletionThread(LPVOID lpParam);
 
-    DWORD _IOCPThread();
+	BOOL WaitClientConnect();
 
-    BOOL WaitPipeConnection();
-
-    BOOL CloseConnection(IIPCConnector* pConnector);
-
-    void CreateConnection(HANDLE hCom);
-
-    void AddClient(HANDLE hPort, IIPCConnector* pClient);
-
-    void RemoveClient(HANDLE hPort);
-
-    IIPCConnector* FindClient(HANDLE hPort);
-
-    LPIPC_DATA_PACKAGE CreateOverlapped(IPC_MESSAGE_TYPE messageType);
-
-    friend class CNamedPipeConnector;
+	DWORD GetCpuNum();
 
 private:
 
-    IIPCEvent* m_pEventHandler;
+	CIOCompletionPort m_iocp;
 
-    HANDLE m_hCompletionPort;
+	ConnectorMap m_connectorMap;
 
-    TCHAR m_sNamedPipe[MAX_PATH];
+	ConnectorMap::const_iterator m_citCurrent;
+	
+	TCHAR m_sPipeName[MAX_PATH];
 
-    CRITICAL_SECTION m_csConnnectorMap;
+	HANDLE* m_hThreadIOCP;
 
-    ConnectorMap m_connectorMap;
-
-    ConnectorMap::const_iterator m_citCurrent;
+	IIPCEvent* m_pEvent;
 };
 
 class CNamedPipeConnector : public IIPCConnector
 {
 public:
-    CNamedPipeConnector(HANDLE hCom, IIPCObject* pServer, IIPCEvent* pEvent);
+	CNamedPipeConnector();
 
-    virtual ~CNamedPipeConnector();
+	virtual ~CNamedPipeConnector();
 
-    virtual HANDLE GetHandle();
+	BOOL Create(LPCTSTR lpPipeName);
 
-    virtual DWORD GetSID();
+	BOOL WaitConnect();
 
-    virtual LPCTSTR GetName();
+	void Close();
 
-    virtual BOOL SendMessage(LPCVOID lpBuf, DWORD dwBufSize);
+	BOOL DoRead();
 
-    virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize);
+	BOOL DoReadWrite();
 
-    virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize);
+	HANDLE GetHandle();
 
-    friend class CNamedPipeServer;
+	virtual DWORD GetSID();
 
-protected:
-    BOOL PostReadRequestToIOCP();
+	virtual LPCTSTR GetName();
 
-    BOOL PostWriteRequestToIOCP();
+	virtual BOOL SendMessage( LPCVOID lpBuf, DWORD dwBufSize );
+
+	virtual BOOL PostMessage( LPCVOID lpBuf, DWORD dwBufSize );
+
+	virtual BOOL RequestAndReply( LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize );
+
+	friend class CNamedPipeServer;
 
 private:
+	CNamedPipeWrapper m_pipe;
 
-    HANDLE m_hCom;
+	IPC_DATA_OVERLAPPEDEX m_recvPackage;
 
-    IIPCObject* m_pServer;
+	IPC_DATA_OVERLAPPEDEX m_sendPackage;
 
-    IIPCEvent* m_pEventSensor;
+	IPC_DATA_OVERLAPPEDEX m_connPackage;
 
-    TCHAR m_sName[MAX_PATH];
-
-    IPC_DATA_OVERLAPPEDEX m_recvPackage;
-
-    IPC_DATA_OVERLAPPEDEX m_sendPackage;
-
+	BOOL m_bExit;
 };
-

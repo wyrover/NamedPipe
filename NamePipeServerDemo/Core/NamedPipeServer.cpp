@@ -204,7 +204,7 @@ BOOL CNamedPipeServer::CloseConnection(IIPCConnector* pConnector)
 
     if(NULL != pConnector)
     {
-        CNamedPipeConnector* pNamedConnector = (CNamedPipeConnector*)pConnector;
+        CNamedPipeConnector* pNamedConnector = dynamic_cast<CNamedPipeConnector*>(pConnector);
 
         if(NULL != pNamedConnector)
         {

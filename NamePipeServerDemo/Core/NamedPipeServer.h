@@ -62,7 +62,7 @@ protected:
 
     IIPCConnector* FindClient(HANDLE hPort);
 
-	LPIPC_DATA_PACKAGE CreateOverlapped(IPC_MESSAGE_TYPE messageType);
+    LPIPC_DATA_PACKAGE CreateOverlapped(IPC_MESSAGE_TYPE messageType);
 
     friend class CNamedPipeConnector;
 
@@ -79,8 +79,6 @@ private:
     ConnectorMap m_connectorMap;
 
     ConnectorMap::const_iterator m_citCurrent;
-
-//  COverlappedPool m_overlappedPool;
 };
 
 class CNamedPipeConnector : public IIPCConnector
@@ -102,9 +100,12 @@ public:
 
     virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize);
 
-//    BOOL GenericMessage(NAMED_PIPE_MESSAGE* pMessage, LPCVOID lpRequest, DWORD dwRequestLen);
-
     friend class CNamedPipeServer;
+
+protected:
+    BOOL PostReadRequestToIOCP();
+
+    BOOL PostWriteRequestToIOCP();
 
 private:
 
@@ -116,7 +117,9 @@ private:
 
     TCHAR m_sName[MAX_PATH];
 
-	IPC_DATA_PACKAGE m_recvPackage;
+    IPC_DATA_OVERLAPPEDEX m_recvPackage;
+
+    IPC_DATA_OVERLAPPEDEX m_sendPackage;
 
 };
 

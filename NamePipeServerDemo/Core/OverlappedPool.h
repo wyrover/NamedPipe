@@ -7,25 +7,23 @@ class COverlappedPool
 {
 public:
 
-    typedef std::vector<LPOVERLAPPED_PACKAGE> ovItemVector;
+    typedef std::vector<LPIPC_DATA_PACKAGE> ovItemVector;
 
     COverlappedPool(void);
     virtual ~COverlappedPool(void);
 
     void Create(DWORD dwSize = 20);
     void Close();
-    LPOVERLAPPED_PACKAGE Alloc(IPC_MESSAGE_TYPE messageType);
-    void Release(LPOVERLAPPED_PACKAGE lpo);
+    LPIPC_DATA_PACKAGE Alloc(IPC_MESSAGE_TYPE messageType);
+    void Release(LPIPC_DATA_PACKAGE lpo);
     DWORD WaitAll(BOOL bWait, DWORD dwTimeout);
 
 // protected:
 //  LPOVERLAPPED_PACKAGE FindItemByOv(LPOVERLAPPED lpo);
 
 private:
-    ovItemVector m_vecOvItem;
     CRITICAL_SECTION m_cslock;
-//  HANDLE* m_pEventHandleArr;
-};
 
-LPOVERLAPPED_PACKAGE CreateOverlapped(IPC_MESSAGE_TYPE messageType);
+	LPIPC_DATA_PACKAGE m_packageArr;
+};
 

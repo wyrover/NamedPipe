@@ -50,18 +50,19 @@ public:
 
 protected:
 
-	BOOL _CreateIOCPThreadPool(DWORD dwThreadNum);
+    BOOL _CreateIOCPThreadPool(DWORD dwThreadNum);
 
-	static DWORD __stdcall _IOCPThreadProc(LPVOID lpParam);
+    static DWORD __stdcall _IOCPThreadProc(LPVOID lpParam);
 
-	DWORD _IOCPThread();
+    DWORD _IOCPThread();
 
-	BOOL CloseConnection(CNamedPipeClient* pConnector);
+    BOOL CloseConnection(CNamedPipeClient* pConnector);
 
-	LPIPC_DATA_PACKAGE GenericMessage(LPVOID lpBuf, DWORD dwBufSize, IPC_MESSAGE_TYPE messageType);
+    BOOL PostReadRequestToIOCP();
+
 private:
 
-	HANDLE m_hCompletionPort;
+    HANDLE m_hCompletionPort;
 
     IIPCEvent* m_pEventSensor;
 
@@ -69,11 +70,11 @@ private:
 
     int m_iIterator;
 
-    DWORD m_dwPID;
-
     TCHAR m_sName[MAX_PATH];
 
-	IPC_DATA_PACKAGE m_recvPackage;
+    IPC_DATA_OVERLAPPEDEX m_recvPackage;
+
+    IPC_DATA_OVERLAPPEDEX m_sendPackage;
 
 };
 

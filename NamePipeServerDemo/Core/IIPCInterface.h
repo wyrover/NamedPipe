@@ -14,16 +14,29 @@ enum IPC_MESSAGE_TYPE
 
 const int SYELOG_MAXIMUM_MESSAGE = 4096;
 
-typedef struct _IPC_DATA_PACKAGE : OVERLAPPED
+typedef struct _IPC_DATA_PACKAGE
 {
-    DWORD dwProcessID;                              // 当前进程ID
-    FILETIME ftOccurance;                           // 异步投递发生时间
-    DWORD dwDataSize;                              // 用户回应数据量
-    BYTE lpData[SYELOG_MAXIMUM_MESSAGE];           // 用户回应缓冲区
-    DWORD dwTotalSize;                              // 通信包整体大小
-    IPC_MESSAGE_TYPE emMessageType;
+    DWORD dwTotalSize;                                      // 通信包整体大小
+    DWORD dwProcessID;                                      // 当前进程ID
+    FILETIME ftOccurance;                                   // 异步投递发生时间
+    DWORD dwDataSize;                                   // 用户回应数据量
+    BYTE lpData[SYELOG_MAXIMUM_MESSAGE];                // 用户回应缓冲区
+    BOOL bUsed;                                             // 是否正在被使用
 
 } IPC_DATA_PACKAGE, *LPIPC_DATA_PACKAGE;
+
+
+typedef struct _IPC_DATA_OVERLAPPEDEX : OVERLAPPED
+{
+    IPC_MESSAGE_TYPE emMessageType;                         // 消息类型
+    IPC_DATA_PACKAGE ipcDataPackage;
+} IPC_DATA_OVERLAPPEDEX, *LPIPC_DATA_OVERLAPPEDEX;
+
+typedef struct _USER_DATA_PACKAGE
+{
+    DWORD dwPackageType;
+    BYTE lpBuf[MAX_PATH];
+} USER_DATA_PACKAGE, *LPUSER_DATA_PACKAGE;
 
 #define pure_virtual __declspec(novtable)
 

@@ -1,8 +1,9 @@
 #pragma once
 #include "IIPCInterface.h"
-#include <queue>
+#include "IoCompletePort.h"
+#include "NamedPipeWrapper.h"
 
-class CNamedPipeClient : public IIPCObject , public IIPCEvent , public IIPCConnector, public IIPCConnectorIterator
+class CNamedPipeClient : public IIPCObject , public IIPCConnector, public IIPCConnectorIterator
 {
 public:
 
@@ -16,25 +17,11 @@ public:
 
     virtual IIPCConnectorIterator* GetClients();
 
-    virtual void OnConnect(IIPCObject* pServer, IIPCConnector* pClient);
-
-    virtual void OnDisConnect(IIPCObject* pServer, IIPCConnector* pClient);
-
-    virtual void OnCreate(IIPCObject* pServer);
-
-    virtual void OnClose(IIPCObject* pServer);
-
-    virtual void OnRecv(IIPCObject* pServer, IIPCConnector* pClient, LPCVOID lpBuf, DWORD dwBufSize);
-
-    virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize);
-
     virtual HANDLE GetHandle();
 
     virtual DWORD GetSID();
 
     virtual LPCTSTR GetName();
-
-    virtual BOOL SendMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
     virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
@@ -50,31 +37,31 @@ public:
 
 protected:
 
-    BOOL _CreateIOCPThreadPool(DWORD dwThreadNum);
-
-    static DWORD __stdcall _IOCPThreadProc(LPVOID lpParam);
-
-    DWORD _IOCPThread();
+    static DWORD WINAPI IOCompletionThread(LPVOID lpParam);
 
     BOOL CloseConnection(CNamedPipeClient* pConnector);
 
-    BOOL PostReadRequestToIOCP();
+    BOOL DoRead();
+
+    void ClearOverlapped(LPOVERLAPPED lpo);
+
+    DWORD GetCpuNum();
 
 private:
 
-    HANDLE m_hCompletionPort;
-
-    IIPCEvent* m_pEventSensor;
-
-    HANDLE m_hPipe;
+    IIPCEvent* m_pEvent;
 
     int m_iIterator;
 
     TCHAR m_sName[MAX_PATH];
 
-    IPC_DATA_OVERLAPPEDEX m_recvPackage;
+    DWORD m_dwProcessID;
 
-    IPC_DATA_OVERLAPPEDEX m_sendPackage;
+    CIOCompletionPort m_iocp;
+
+    CNamedPipeWrapper m_pipe;
+
+    HANDLE* m_hThreadIOCP;
 
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 #include <windows.h>
+#include <assert.h>
 
 class CNamedPipeWrapper
 {
@@ -37,9 +38,7 @@ public:
         __in_opt  LPSECURITY_ATTRIBUTES lpSecurityAttributes
     )
     {
-        if(INVALID_HANDLE_VALUE != m_hPipe)
-            return TRUE;
-
+        assert(INVALID_HANDLE_VALUE == m_hPipe);
         m_hPipe =::CreateNamedPipe(lpName, dwOpenMode, dwPipeMode, nMaxInstances, nOutBufferSize, nInBufferSize, nDefaultTimeOut, lpSecurityAttributes);
         return (INVALID_HANDLE_VALUE != m_hPipe);
     }
@@ -50,6 +49,22 @@ public:
     {
         return ::ConnectNamedPipe(m_hPipe, lpOverlapped);
     }
+
+    BOOL CreateFile(
+        LPCTSTR lpFileName,
+        DWORD dwDesiredAccess,
+        DWORD dwShareMode,
+        LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+        DWORD dwCreationDisposition,
+        DWORD dwFlagsAndAttributes,
+        HANDLE hTemplateFile
+    )
+    {
+        assert(INVALID_HANDLE_VALUE == m_hPipe);
+        m_hPipe = ::CreateFile(lpFileName, dwDesiredAccess, dwShareMode, lpSecurityAttributes, dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
+        return (INVALID_HANDLE_VALUE != m_hPipe);
+    }
+
 
     BOOL ReadFile(
         LPVOID lpBuffer,
@@ -81,6 +96,15 @@ public:
     )
     {
         return ::DisconnectNamedPipe(m_hPipe);
+    }
+
+    BOOL WINAPI SetNamedPipeHandleState(
+        __in_opt  LPDWORD lpMode,
+        __in_opt  LPDWORD lpMaxCollectionCount,
+        __in_opt  LPDWORD lpCollectDataTimeout
+    )
+    {
+        return ::SetNamedPipeHandleState(m_hPipe, lpMode, lpMaxCollectionCount, lpCollectDataTimeout);
     }
 
     BOOL TransactNamedPipe(

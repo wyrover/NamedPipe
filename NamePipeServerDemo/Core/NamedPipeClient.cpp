@@ -2,34 +2,15 @@
 #include "NamedPipeClient.h"
 
 
-CNamedPipeClient::CNamedPipeClient(IIPCEvent* pEvent): m_pEventSensor(pEvent)
-    , m_hPipe(INVALID_HANDLE_VALUE)
+CNamedPipeClient::CNamedPipeClient(IIPCEvent* pEvent): m_pEvent(pEvent), m_hThreadIOCP(NULL), m_dwProcessID(0)
 {
-    ZeroMemory(&m_sendPackage, sizeof(IPC_DATA_OVERLAPPEDEX));
-    ZeroMemory(&m_recvPackage, sizeof(IPC_DATA_OVERLAPPEDEX));
-    m_recvPackage.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    m_sendPackage.hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
 }
 
 
 CNamedPipeClient::~CNamedPipeClient(void)
 {
     Close();
-
-    if(NULL != m_recvPackage.hEvent)
-    {
-        WaitForSingleObject(m_recvPackage.hEvent, INFINITE);
-        CloseHandle(m_recvPackage.hEvent);
-        m_recvPackage.hEvent = NULL;
-    }
-
-    if(NULL != m_sendPackage.hEvent)
-    {
-        WaitForSingleObject(m_sendPackage.hEvent, INFINITE);
-        CloseHandle(m_sendPackage.hEvent);
-        m_sendPackage.hEvent = NULL;
-    }
-
 }
 
 BOOL CNamedPipeClient::Create(LPCTSTR lpPipeName)
@@ -40,39 +21,34 @@ BOOL CNamedPipeClient::Create(LPCTSTR lpPipeName)
 
     while(TRUE)
     {
-        m_hPipe = CreateFile(sPipeName, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
-
-        if(m_hPipe != INVALID_HANDLE_VALUE)
-        {
-            OnCreate(this);
+        if(m_pipe.CreateFile(sPipeName, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL))
             break;
-        }
 
         DWORD dwError = GetLastError();
 
         if(ERROR_PIPE_BUSY != dwError)
             return FALSE;
 
-        if(!WaitNamedPipe(sPipeName, 5000))
+        if(!m_pipe.WaitNamedPipe(sPipeName, 5000))
             return FALSE;
     }
 
-    m_hCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 0);
+    const DWORD dwThreadCount = GetCpuNum();
 
-    if(NULL == m_hCompletionPort)
+    if(!m_iocp.Create(dwThreadCount))
         return FALSE;
 
-    if(NULL == CreateIoCompletionPort(m_hPipe, m_hCompletionPort, (ULONG_PTR)this, 0))
-        return FALSE;
+    m_hThreadIOCP = new HANDLE[dwThreadCount];
 
-    if(!_CreateIOCPThreadPool(0))
-        return FALSE;
-
+    for(DWORD i = 0; i < dwThreadCount; ++i)
+        m_hThreadIOCP[i] = CreateThread(0, 0, IOCompletionThread, this, 0, NULL);
 
     DWORD dwMode = PIPE_READMODE_MESSAGE ;
-    BOOL fSuccess = SetNamedPipeHandleState(m_hPipe, &dwMode, NULL, NULL);
 
-    if(!fSuccess)
+    if(!m_pipe.SetNamedPipeHandleState(&dwMode, NULL, NULL))
+        return FALSE;
+
+    if(!m_iocp.AssociateDevice(m_pipe.GetHandle(), (ULONG_PTR)this))
         return FALSE;
 
     return TRUE;
@@ -80,79 +56,47 @@ BOOL CNamedPipeClient::Create(LPCTSTR lpPipeName)
 
 void CNamedPipeClient::Close()
 {
-    if(NULL != m_hPipe)
+    m_pipe.Close();
+    m_iocp.Close();
+
+    const DWORD dwThreadCount = GetCpuNum();
+
+    if(NULL != m_hThreadIOCP)
+        WaitForMultipleObjects(dwThreadCount, m_hThreadIOCP, TRUE, INFINITE);
+
+    for(DWORD i = 0; i < dwThreadCount; i++)
     {
-        CloseHandle(m_hPipe);
-        m_hPipe = NULL;
+        if(NULL != m_hThreadIOCP && NULL != m_hThreadIOCP[i])
+        {
+            CloseHandle(m_hThreadIOCP[i]);
+            m_hThreadIOCP[i] = NULL;
+        }
     }
 
-    if(NULL != m_hCompletionPort)
-    {
-        CloseHandle(m_hCompletionPort);
-        m_hCompletionPort = NULL;
-    }
-}
-
-
-void CNamedPipeClient::OnConnect(IIPCObject* pServer, IIPCConnector* pClient)
-{
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnConnect(pServer, pClient);
-}
-
-void CNamedPipeClient::OnDisConnect(IIPCObject* pServer, IIPCConnector* pClient)
-{
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnDisConnect(pServer, pClient);
-}
-
-void CNamedPipeClient::OnCreate(IIPCObject* pServer)
-{
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnCreate(pServer);
-}
-
-void CNamedPipeClient::OnClose(IIPCObject* pServer)
-{
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnClose(pServer);
-}
-
-void CNamedPipeClient::OnRecv(IIPCObject* pServer, IIPCConnector* pClient, LPCVOID lpBuf, DWORD dwBufSize)
-{
-    if(NULL == lpBuf || 0 == dwBufSize)
-        return;
-
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnRecv(pServer, pClient, lpBuf, dwBufSize);
-}
-
-void CNamedPipeClient::OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize)
-{
-    if(NULL != m_pEventSensor)
-        m_pEventSensor->OnSend(pServer, pClient, lpBuf, dwBufSize);
+    delete m_hThreadIOCP;
+    m_hThreadIOCP = NULL;
 }
 
 HANDLE CNamedPipeClient::GetHandle()
 {
-    return m_hPipe;
-}
-
-BOOL CNamedPipeClient::SendMessage(LPCVOID lpBuf, DWORD dwBufSize)
-{
-    return PostMessage(lpBuf, dwBufSize);
+    return m_pipe.GetHandle();
 }
 
 BOOL CNamedPipeClient::PostMessage(LPCVOID lpBuf, DWORD dwBufSize)
 {
-    m_sendPackage.emMessageType = IPC_MESSAGE_WRIE;
-    m_sendPackage.ipcDataPackage.dwProcessID = GetCurrentProcessId();
-    m_sendPackage.ipcDataPackage.dwDataSize = dwBufSize;
-    memcpy_s(&m_sendPackage.ipcDataPackage.lpData, SYELOG_MAXIMUM_MESSAGE, lpBuf, dwBufSize);
-    m_sendPackage.ipcDataPackage.dwTotalSize = sizeof(IPC_DATA_OVERLAPPEDEX) - SYELOG_MAXIMUM_MESSAGE + dwBufSize;
+    LPIPC_DATA_OVERLAPPEDEX package = new IPC_DATA_OVERLAPPEDEX;
+    ZeroMemory(package, sizeof(IPC_DATA_OVERLAPPEDEX));
+    package->hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    package->emMessageType = IPC_MESSAGE_WRITE;
+    package->ipcDataPackage.dwDataSize = dwBufSize;
+    package->ipcDataPackage.dwProcessID = GetCurrentProcessId();
+    package->ipcDataPackage.dwTotalSize = sizeof(IPC_DATA_PACKAGE) - SYELOG_MAXIMUM_MESSAGE * sizeof(TCHAR) + dwBufSize;
+    GetSystemTimeAsFileTime(&package->ipcDataPackage.ftOccurance);
+    memcpy_s(package->ipcDataPackage.lpData, SYELOG_MAXIMUM_MESSAGE, lpBuf, dwBufSize);
+
     DWORD dwWrited = 0;
-    BOOL bSucess = WriteFile(m_hPipe, &m_sendPackage.ipcDataPackage, m_sendPackage.ipcDataPackage.dwTotalSize, &dwWrited, &m_sendPackage);
-    return ((bSucess == TRUE) || (GetLastError() == ERROR_IO_PENDING));
+    BOOL bSucess = m_pipe.WriteFile(&package->ipcDataPackage, package->ipcDataPackage.dwTotalSize, &dwWrited, package);
+    return (bSucess || GetLastError() == ERROR_IO_PENDING);
 }
 
 IIPCConnectorIterator* CNamedPipeClient::GetClients()
@@ -182,34 +126,40 @@ IIPCConnector* CNamedPipeClient::GetCurrent()
 
 BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize)
 {
-    m_sendPackage.emMessageType = IPC_MESSAGE_READ_WRITE;
-    m_sendPackage.ipcDataPackage.dwProcessID = GetCurrentProcessId();
-    m_sendPackage.ipcDataPackage.dwDataSize = dwSendBufSize;
-//    memcpy_s(m_sendPackage.ipcDataPackage.lpData, SYELOG_MAXIMUM_MESSAGE, lpSendBuf, dwSendBufSize);
-    m_sendPackage.ipcDataPackage.dwTotalSize = sizeof(IPC_DATA_PACKAGE);
-	m_sendPackage.ipcDataPackage.msgType=IPC_MESSAGE_READ_WRITE;
-    m_recvPackage.emMessageType = IPC_MESSAGE_READ_WRITE;
+    LPIPC_DATA_OVERLAPPEDEX sendPackage = new IPC_DATA_OVERLAPPEDEX;
+    ZeroMemory(sendPackage, sizeof(IPC_DATA_OVERLAPPEDEX));
+    sendPackage->hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    sendPackage->emMessageType = IPC_MESSAGE_READ;
+    sendPackage->ipcDataPackage.dwDataSize = dwSendBufSize;
+    sendPackage->ipcDataPackage.dwProcessID = GetCurrentProcessId();
+    sendPackage->ipcDataPackage.dwTotalSize = sizeof(IPC_DATA_PACKAGE) - SYELOG_MAXIMUM_MESSAGE * sizeof(TCHAR) + dwSendBufSize;
+    GetSystemTimeAsFileTime(&sendPackage->ipcDataPackage.ftOccurance);
+    memcpy_s(sendPackage->ipcDataPackage.lpData, SYELOG_MAXIMUM_MESSAGE, lpSendBuf, dwSendBufSize);
+
+    IPC_DATA_OVERLAPPEDEX recePackage;
+    ZeroMemory(&recePackage, sizeof(IPC_DATA_PACKAGE));
+
     DWORD dwWrited = 0;
-    BOOL bSucess = TransactNamedPipe(m_hPipe, &m_sendPackage.ipcDataPackage, m_sendPackage.ipcDataPackage.dwTotalSize, &m_recvPackage.ipcDataPackage, sizeof(IPC_DATA_PACKAGE), &dwWrited, &m_sendPackage);
+    BOOL bSucess = m_pipe.TransactNamedPipe(&sendPackage->ipcDataPackage, sendPackage->ipcDataPackage.dwTotalSize, &recePackage.ipcDataPackage, sizeof(IPC_DATA_PACKAGE), &dwWrited, sendPackage);
 
     if(GetLastError() == ERROR_IO_PENDING)
     {
-        if(GetOverlappedResult(m_hPipe, &m_sendPackage, dwTransactSize, TRUE))
+        if(GetOverlappedResult(m_pipe.GetHandle(), sendPackage, dwTransactSize, TRUE))
             bSucess = TRUE;
     }
 
     if(bSucess)
     {
-        memcpy_s(lpReplyBuf, dwReplyBufSize, m_recvPackage.ipcDataPackage.lpData, m_recvPackage.ipcDataPackage.dwDataSize);
-        *dwTransactSize = m_recvPackage.ipcDataPackage.dwDataSize;
+        memcpy_s(lpReplyBuf, dwReplyBufSize, recePackage.ipcDataPackage.lpData, recePackage.ipcDataPackage.dwDataSize);
+        *dwTransactSize = recePackage.ipcDataPackage.dwDataSize;
     }
 
-    return TRUE;
+    return bSucess;
 }
 
 DWORD CNamedPipeClient::GetSID()
 {
-    return GetCurrentProcessId();
+    return m_dwProcessID;
 }
 
 LPCTSTR CNamedPipeClient::GetName()
@@ -217,129 +167,91 @@ LPCTSTR CNamedPipeClient::GetName()
     return m_sName;
 }
 
-BOOL CNamedPipeClient::_CreateIOCPThreadPool(DWORD dwThreadNum)
-{
-    DWORD dwThread;
-    HANDLE hThread;
-    DWORD i;
-    SYSTEM_INFO SystemInfo;
-
-    GetSystemInfo(&SystemInfo);
-
-    DWORD aThreadNum = (0 == dwThreadNum ? SystemInfo.dwNumberOfProcessors : dwThreadNum);
-
-    for(i = 0; i < 2 * aThreadNum; i++)
-    {
-        hThread = CreateThread(NULL, 0, _IOCPThreadProc, this, 0, &dwThread);
-
-        if(NULL == hThread)
-            return FALSE;
-
-        CloseHandle(hThread);
-    }
-
-    return TRUE;
-}
-
-DWORD __stdcall CNamedPipeClient::_IOCPThreadProc(LPVOID lpParam)
+DWORD CNamedPipeClient::IOCompletionThread(LPVOID lpParam)
 {
     CNamedPipeClient* pThis = (CNamedPipeClient*)lpParam;
 
-    if(NULL == pThis)
+    if(NULL == lpParam)
         return -1;
 
-    return pThis->_IOCPThread();
-}
+    CIOCompletionPort* iocp = &pThis->m_iocp;
 
-DWORD CNamedPipeClient::_IOCPThread()
-{
-    CNamedPipeClient* pConnector = NULL;
-    BOOL b;
-    LPIPC_DATA_OVERLAPPEDEX lpo;
-    DWORD nBytes;
+    CNamedPipeClient* pClient = NULL;
+    DWORD dwBytesTransferred = 0;
+    IPC_DATA_OVERLAPPEDEX* po = NULL;
+    BOOL bSucess = FALSE;
 
-    for(BOOL fKeepLooping = TRUE; fKeepLooping;)
+    while(TRUE)
     {
-        lpo = NULL;
-        nBytes = 0;
-        b = GetQueuedCompletionStatus(m_hCompletionPort, &nBytes, (PULONG_PTR)&pConnector, (OVERLAPPED**)&lpo, INFINITE);
+        bSucess = iocp->DequeuePacket((ULONG_PTR*)&pClient, &dwBytesTransferred, (OVERLAPPED **)&po, INFINITE);
 
-        if(!b && lpo == NULL)
+        if(!bSucess && NULL == po)
         {
-            fKeepLooping = FALSE;
             break;
         }
-        else if(!b)
+        else if(!bSucess && GetLastError() == ERROR_BROKEN_PIPE)
         {
-            if(GetLastError() == ERROR_BROKEN_PIPE)
-            {
-                if(NULL == lpo)
-                {
-                    CloseConnection(pConnector);
-                    continue;
-                }
-            }
+            pClient->ClearOverlapped(po);
+            continue;
         }
 
-        IPC_MESSAGE_TYPE messageType = lpo->emMessageType;
+        IPC_MESSAGE_TYPE type = IPC_MESSAGE_UKNOWN;
 
-        BOOL b = FALSE;
+        if(NULL != po)
+            type = po->emMessageType;
 
-        switch(messageType)
+        switch(type)
         {
-            case IPC_MESSAGE_CLIENTCONNECT:
-            {
-                OnConnect(this, pConnector);
-                break;
-            }
-
-            case IPC_MESSAGE_CLIENTDISCONNECT:
-            {
-                CloseConnection(pConnector);
-                break;
-            }
-
             case IPC_MESSAGE_READ:
-            {
-                OnRecv(this, pConnector, pConnector->m_recvPackage.ipcDataPackage.lpData, pConnector->m_recvPackage.ipcDataPackage.dwDataSize);
+                pClient->m_dwProcessID = po->ipcDataPackage.dwProcessID;
+                pThis->m_pEvent->OnRequest(pThis, pClient, &po->ipcDataPackage.lpData, dwBytesTransferred);
+                pClient->ClearOverlapped(po);
                 break;
-            }
 
-            case IPC_MESSAGE_WRIE:
-            {
-                PostReadRequestToIOCP();
-                break;
-            }
-
-            default:
+            case IPC_MESSAGE_WRITE:
+                pClient->DoRead();
+                pClient->ClearOverlapped(po);
                 break;
         }
     }
+
+    _tprintf(_T("DequeuePacket failed w/err 0x%08lx\n"), GetLastError());
 
     return 0;
 }
 
+void CNamedPipeClient::ClearOverlapped(LPOVERLAPPED lpo)
+{
+    if(NULL != lpo)
+    {
+        CloseHandle(lpo->hEvent);
+        lpo->hEvent = NULL;
+        delete lpo;
+        lpo = NULL;
+    }
+}
+
 BOOL CNamedPipeClient::CloseConnection(CNamedPipeClient* pConnector)
 {
-    FlushFileBuffers(m_hPipe);
-    DisconnectNamedPipe(m_hPipe);
-
-    if(NULL != pConnector)
-        OnDisConnect(this, pConnector);
-
-    CloseHandle(m_hPipe);
-    m_hPipe = INVALID_HANDLE_VALUE;
-
+    m_pipe.FlushFileBuffers();
+    m_pipe.DisconnectNamedPipe();
+    m_pipe.Close();
     return TRUE;
 }
 
-BOOL CNamedPipeClient::PostReadRequestToIOCP()
+BOOL CNamedPipeClient::DoRead()
 {
-    m_recvPackage.emMessageType = IPC_MESSAGE_READ;
-    BOOL bSucess = ReadFile(m_hPipe, &m_recvPackage.ipcDataPackage , sizeof(IPC_DATA_PACKAGE), NULL, &m_recvPackage);
+    LPIPC_DATA_OVERLAPPEDEX package = new IPC_DATA_OVERLAPPEDEX;
+    ZeroMemory(package, sizeof(IPC_DATA_OVERLAPPEDEX));
+    package->hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    package->emMessageType = IPC_MESSAGE_READ;
+    BOOL bSucess = m_pipe.ReadFile(&package->ipcDataPackage, sizeof(IPC_DATA_PACKAGE), NULL, package);
+    return (bSucess || ERROR_IO_PENDING == GetLastError());
+}
 
-    if(!bSucess && GetLastError() == ERROR_BROKEN_PIPE)
-        return FALSE;
-
-    return (bSucess || (GetLastError() == ERROR_IO_PENDING));
+DWORD CNamedPipeClient::GetCpuNum()
+{
+    SYSTEM_INFO sysInfo = { 0 };
+    GetNativeSystemInfo(&sysInfo);
+    return sysInfo.dwNumberOfProcessors;
 }

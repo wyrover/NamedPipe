@@ -7,8 +7,6 @@
 #include <conio.h>
 #include <locale.h>
 
-BOOL g_bExit = FALSE;
-
 class CNamedPipeEvent : public IIPCEvent
 {
 public:
@@ -22,52 +20,17 @@ public:
 
     }
 
-    virtual void OnConnect(IIPCObject* pServer, IIPCConnector* pClient)
+    virtual void OnRequest(IIPCObject* pServer, IIPCConnector* pClient, LPCVOID lpBuf, DWORD dwBufSize)
     {
-        TCHAR* sSendMsg = _T("客户端连接到来啊啊啊\r\n");
-//         pClient->PostMessage(sSendMsg, _tcslen(sSendMsg)*sizeof(TCHAR));
+        if(NULL == lpBuf || dwBufSize == 0)
+            return ;
 
-//      static int x = 0;
-//      TCHAR aBuf[MAX_PATH] = {0};
-//      _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
-//
-//       if(!pClient->PostMessage(sSendMsg, _tcslen(sSendMsg)*sizeof(TCHAR)))
-//              return ;
-    }
-
-    virtual void OnDisConnect(IIPCObject* pServer, IIPCConnector* pClient)
-    {
-
-    }
-
-    virtual void OnCreate(IIPCObject* pServer)
-    {
-
-    }
-
-    virtual void OnClose(IIPCObject* pServer)
-    {
-
-    }
-
-    virtual void OnRecv(IIPCObject* pServer, IIPCConnector* pClient, LPCVOID lpBuf, DWORD dwBufSize)
-    {
-        _tsetlocale(LC_ALL, _T("chs"));
-        _tprintf_s(_T("%s"), lpBuf);
-
-//        TCHAR* sReply = _T("Hello,Server\r\n");
-
-        static int x = 0;
-        TCHAR aBuf[MAX_PATH] = {0};
-        _stprintf_s(aBuf, _T("客户端 %d 发来数据 %d \r\n"), GetCurrentProcessId(), x++);
-//
-//         if(!pClient->PostMessage(aBuf, _tcslen(aBuf)*sizeof(TCHAR)))
-//             return ;
-    }
-
-    virtual void OnSend(IIPCObject* pServer, IIPCConnector* pClient, LPVOID lpBuf, DWORD dwBufSize)
-    {
-
+        LPUSER_DATA_PACKAGE userRequest = (LPUSER_DATA_PACKAGE)lpBuf;
+		if (userRequest->dwPackageType==1)
+		{
+			_tsetlocale(LC_ALL, _T("chs"));
+			_tprintf_s(_T("%s"), userRequest->lpBuf);
+		}
     }
 };
 
@@ -77,8 +40,12 @@ DWORD __stdcall SendThread(LPVOID lpParam)
 
     IIPCConnectorIterator* pClientIterator = pServer->GetClients();
 
-    while(FALSE == g_bExit)
+    int x = 10;
+
+    while(x > 0)
     {
+        x--;
+
         for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
         {
             IIPCConnector* aClient = pClientIterator->GetCurrent();
@@ -86,51 +53,14 @@ DWORD __stdcall SendThread(LPVOID lpParam)
             if(NULL == aClient)
                 continue;
 
-            TCHAR* sReply = _T("Hello,Server\r\n");
-            aClient->SendMessage(sReply, _tcslen(sReply)*sizeof(TCHAR));
+            TCHAR* sRequest = _T("异步消息：你好，服务端\r\n");
+
+            _USER_DATA_PACKAGE userRequest = {0};
+            userRequest.dwPackageType = 1;
+            _tcscpy_s(userRequest.lpBuf, MAX_PATH, sRequest);
+
+            aClient->PostMessage(&userRequest, sizeof(_USER_DATA_PACKAGE));
         }
-
-        Sleep(10);
-//        g_bExit = TRUE;
-    }
-
-    return 0;
-}
-
-DWORD __stdcall PostThread(LPVOID lpParam)
-{
-    IIPCObject* pServer = (IIPCObject*)lpParam;
-
-    IIPCConnectorIterator* pClientIterator = pServer->GetClients();
-
-    while(FALSE == g_bExit)
-    {
-        for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
-        {
-            IIPCConnector* aClient = pClientIterator->GetCurrent();
-
-            if(NULL == aClient)
-                continue;
-
-            TCHAR* sRequest = _T("Hello,Server\r\n");
-            DWORD dwRequestSize = _tcslen(sRequest) * sizeof(TCHAR);
-
-            USER_DATA_PACKAGE userData;
-            userData.dwPackageType = 0x100;
-            memcpy_s(userData.lpBuf, sizeof(userData.lpBuf), sRequest, dwRequestSize);
-            aClient->PostMessage(&userData, sizeof(userData) - SYELOG_MAXIMUM_MESSAGE + dwRequestSize);
-
-//             TCHAR sReply[MAX_PATH] = {0};
-//             DWORD dwReplySize = 0;
-//             if (aClient->RequestAndReply(sRequest, dwRequestSize, sReply, MAX_PATH, &dwReplySize))
-//          {
-//              int y=10;
-//          }
-//          int x=0;
-        }
-
-        Sleep(10);
-//        g_bExit = TRUE;
     }
 
     return 0;
@@ -140,8 +70,12 @@ void TestRequestAndReply(IIPCObject* pNamedPipeClient)
 {
     IIPCConnectorIterator* pClientIterator = pNamedPipeClient->GetClients();
 
-    while(FALSE == g_bExit)
+    int x = 10;
+
+    while(x > 0)
     {
+        x--;
+
         for(pClientIterator->Begin(); !pClientIterator->End(); pClientIterator->Next())
         {
             IIPCConnector* aClient = pClientIterator->GetCurrent();
@@ -149,37 +83,22 @@ void TestRequestAndReply(IIPCObject* pNamedPipeClient)
             if(NULL == aClient)
                 continue;
 
-//             TCHAR* sRequest = _T("你好,服务端\r\n");
-//             DWORD dwRequestSize = _tcslen(sRequest) * sizeof(TCHAR);
-//
-//             TCHAR sReply[MAX_PATH] = {0};
-//             DWORD dwReplySize = 0;
-//
-//             if(aClient->RequestAndReply(sRequest, dwRequestSize, sReply, MAX_PATH, &dwReplySize))
-//             {
-//              _tsetlocale(LC_ALL, _T("chs"));
-//              _tprintf_s(_T("%s"), sReply);
-//             }
 
-            TCHAR* sRequest = _T("你好,服务端\r\n");
-            DWORD dwRequestSize = _tcslen(sRequest) * sizeof(TCHAR);
             DWORD dwTransSize = 0;
 
-            USER_DATA_PACKAGE userReply;
-            USER_DATA_PACKAGE userData;
-            userData.dwPackageType = 0x100;
-            memcpy_s(userData.lpBuf, sizeof(userData.lpBuf), sRequest, dwRequestSize);
+            TCHAR* sRequest = _T("同步消息：1+1=?\r\n");
+            _USER_DATA_PACKAGE userRequest = {0};
+            userRequest.dwPackageType = 100;
+            _tcscpy_s(userRequest.lpBuf, MAX_PATH, sRequest);
 
-            if(aClient->RequestAndReply(&userData, sizeof(USER_DATA_PACKAGE), &userReply, sizeof(userReply), &dwTransSize))
+            _USER_DATA_PACKAGE userReply = {0};
+
+            if(aClient->RequestAndReply(&userRequest, sizeof(_USER_DATA_PACKAGE), &userReply, sizeof(_USER_DATA_PACKAGE), &dwTransSize))
             {
                 _tsetlocale(LC_ALL, _T("chs"));
                 _tprintf_s(_T("%s"), userReply.lpBuf);
             }
-
-            int x = 0;
         }
-
-//      g_bExit = TRUE;
     }
 }
 
@@ -195,17 +114,11 @@ int _tmain(int argc, _TCHAR* argv[])
     if(!pNamedPipeClient->Create(_T("NamedPipeServer")))
         return -1;
 
-	SendThread(pNamedPipeClient);
+//    SendThread(pNamedPipeClient);
 
-//    TestRequestAndReply(pNamedPipeClient);
-
-//    HANDLE hThread = CreateThread(NULL, 0, SendThread, pNamedPipeClient, 0, NULL);
+    TestRequestAndReply(pNamedPipeClient);
 
     _getch();
-
-//     g_bExit = TRUE;
-//     WaitForSingleObject(hThread, INFINITE);
-//     CloseHandle(hThread);
 
     pNamedPipeClient->Close();
     delete pNamedPipeClient;

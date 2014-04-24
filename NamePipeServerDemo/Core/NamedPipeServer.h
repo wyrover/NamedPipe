@@ -1,93 +1,89 @@
 #pragma once
 #include "IIPCInterface.h"
-#include "..\NamedPipeWrapper.h"
 #include "IoCompletePort.h"
+#include "NamedPipeWrapper.h"
 
-class CNamedPipeServer: public IIPCObject,public IIPCConnectorIterator
+class CNamedPipeServer: public IIPCObject, public IIPCConnectorIterator
 {
 public:
-	CNamedPipeServer(IIPCEvent* pEvent);
+    CNamedPipeServer(IIPCEvent* pEvent);
 
-	virtual ~CNamedPipeServer();
+    virtual ~CNamedPipeServer();
 
-	virtual BOOL Create( LPCTSTR lpPipeName );
+    virtual BOOL Create(LPCTSTR lpPipeName);
 
-	virtual void Close();
+    virtual void Close();
 
-	virtual IIPCConnectorIterator* GetClients();
+    virtual IIPCConnectorIterator* GetClients();
 
-	virtual void Begin();
+    virtual void Begin();
 
-	virtual BOOL End();
+    virtual BOOL End();
 
-	virtual void Next();
+    virtual void Next();
 
-	virtual IIPCConnector* GetCurrent();
+    virtual IIPCConnector* GetCurrent();
 
 protected:
 
-	void CheckExit();
+    static DWORD WINAPI IOCompletionThread(LPVOID lpParam);
 
-	static DWORD WINAPI IOCompletionThread(LPVOID lpParam);
+    BOOL WaitClientConnect();
 
-	BOOL WaitClientConnect();
-
-	DWORD GetCpuNum();
+    DWORD GetCpuNum();
 
 private:
 
-	CIOCompletionPort m_iocp;
+    CIOCompletionPort m_iocp;
 
-	ConnectorMap m_connectorMap;
+    ConnectorMap m_connectorMap;
 
-	ConnectorMap::const_iterator m_citCurrent;
-	
-	TCHAR m_sPipeName[MAX_PATH];
+    ConnectorMap::const_iterator m_citCurrent;
 
-	HANDLE* m_hThreadIOCP;
+    TCHAR m_sPipeName[MAX_PATH];
 
-	IIPCEvent* m_pEvent;
+    HANDLE* m_hThreadIOCP;
+
+    IIPCEvent* m_pEvent;
 };
 
 class CNamedPipeConnector : public IIPCConnector
 {
 public:
-	CNamedPipeConnector();
+    CNamedPipeConnector();
 
-	virtual ~CNamedPipeConnector();
+    virtual ~CNamedPipeConnector();
 
-	BOOL Create(LPCTSTR lpPipeName);
+    BOOL Create(LPCTSTR lpPipeName);
 
-	BOOL WaitConnect();
+    BOOL WaitConnect();
 
-	void Close();
+    void Close();
 
-	BOOL DoRead();
+    BOOL DoRead();
 
-	BOOL DoReadWrite();
+    BOOL DoReadWrite(LPVOID lpRequest, DWORD dwRequestSize);
 
-	HANDLE GetHandle();
+    HANDLE GetHandle();
 
-	virtual DWORD GetSID();
+    virtual DWORD GetSID();
 
-	virtual LPCTSTR GetName();
+    virtual LPCTSTR GetName();
 
-	virtual BOOL SendMessage( LPCVOID lpBuf, DWORD dwBufSize );
+    virtual BOOL PostMessage(LPCVOID lpBuf, DWORD dwBufSize);
 
-	virtual BOOL PostMessage( LPCVOID lpBuf, DWORD dwBufSize );
+    virtual BOOL RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize);
 
-	virtual BOOL RequestAndReply( LPVOID lpSendBuf, DWORD dwSendBufSize, LPVOID lpReplyBuf, DWORD dwReplyBufSize, LPDWORD dwTransactSize );
+    friend class CNamedPipeServer;
 
-	friend class CNamedPipeServer;
+protected:
+
+    void ClearOverlapped(LPOVERLAPPED lpo);
 
 private:
-	CNamedPipeWrapper m_pipe;
+    CNamedPipeWrapper m_pipe;
 
-	IPC_DATA_OVERLAPPEDEX m_recvPackage;
+    BOOL m_bExit;
 
-	IPC_DATA_OVERLAPPEDEX m_sendPackage;
-
-	IPC_DATA_OVERLAPPEDEX m_connPackage;
-
-	BOOL m_bExit;
+    DWORD m_dwProcessID;
 };

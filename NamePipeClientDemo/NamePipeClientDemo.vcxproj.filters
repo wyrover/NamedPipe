@@ -33,6 +33,12 @@
     <ClInclude Include="..\NamePipeServerDemo\Core\NamedPipeClient.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="..\NamePipeServerDemo\Core\IoCompletePort.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="..\NamePipeServerDemo\Core\NamedPipeWrapper.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

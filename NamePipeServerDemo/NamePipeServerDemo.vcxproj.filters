@@ -36,8 +36,8 @@
     <ClInclude Include="Core\IoCompletePort.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="NamedPipeWrapper.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="Core\NamedPipeWrapper.h">
+      <Filter>Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

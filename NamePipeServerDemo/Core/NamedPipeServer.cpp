@@ -6,12 +6,13 @@
 
 CNamedPipeServer::CNamedPipeServer(IIPCEvent* pEvent): m_pEvent(pEvent), m_hThreadIOCP(NULL)
 {
-
+    InitializeCriticalSection(&m_csClientMap);
 }
 
 CNamedPipeServer::~CNamedPipeServer()
 {
     Close();
+    DeleteCriticalSection(&m_csClientMap);
 }
 
 BOOL CNamedPipeServer::Create(LPCTSTR lpPipeName)
@@ -58,7 +59,7 @@ void CNamedPipeServer::Close()
 
     for(ConnectorMap::const_iterator cit = m_connectorMap.begin(); cit != m_connectorMap.end(); cit++)
     {
-        CNamedPipeConnector* pClient = dynamic_cast<CNamedPipeConnector*>(cit->second);
+        CNamedPipeConnector* pClient = dynamic_cast<CNamedPipeConnector*>(*cit);
 
         if(NULL != pClient)
         {
@@ -74,6 +75,26 @@ void CNamedPipeServer::Close()
 IIPCConnectorIterator* CNamedPipeServer::GetClients()
 {
     return this;
+}
+
+ConnectorMap::const_iterator CNamedPipeServer::FindClient(CNamedPipeConnector* pClient)
+{
+    EnterCriticalSection(&m_csClientMap);
+    ConnectorMap::const_iterator citFinded = m_connectorMap.end();
+
+    for(ConnectorMap::const_iterator cit = m_connectorMap.begin(); cit != m_connectorMap.end(); cit++)
+    {
+        CNamedPipeConnector* pConnector = dynamic_cast<CNamedPipeConnector*>(*cit);
+
+        if(NULL != pConnector && pConnector->GetHandle() == pClient->GetHandle())
+        {
+            citFinded = cit;
+            break;
+        }
+    }
+
+    LeaveCriticalSection(&m_csClientMap);
+    return citFinded;
 }
 
 void CNamedPipeServer::Begin()
@@ -93,7 +114,7 @@ void CNamedPipeServer::Next()
 
 IIPCConnector* CNamedPipeServer::GetCurrent()
 {
-    return m_citCurrent->second;
+    return *m_citCurrent;
 }
 
 DWORD WINAPI CNamedPipeServer::IOCompletionThread(LPVOID lpParam)
@@ -120,7 +141,11 @@ DWORD WINAPI CNamedPipeServer::IOCompletionThread(LPVOID lpParam)
         }
         else if(!bSucess && GetLastError() == ERROR_BROKEN_PIPE)
         {
-            pThis->m_connectorMap.erase(pClient->GetHandle());
+            ConnectorMap::const_iterator cit = pThis->FindClient(pClient);
+
+            if(cit != pThis->m_connectorMap.end())
+                pThis->m_connectorMap.erase(cit);
+
             pClient->ClearOverlapped(po);
             pClient->Close();
             delete pClient;
@@ -137,7 +162,7 @@ DWORD WINAPI CNamedPipeServer::IOCompletionThread(LPVOID lpParam)
         {
             case IPC_MESSAGE_CLIENTCONNECT:
                 pClient->DoRead();
-                pThis->WaitClientConnect();
+                pThis->WaitClientConnect();     // 第二次等待客户端连接时,会new一个CLIENTCONNECT类型的OVERLAPPED,如果没有客户端连接,直接退出程序的话,会有内存泄露的BUG
                 pClient->ClearOverlapped(po);
                 break;
 
@@ -170,7 +195,7 @@ BOOL CNamedPipeServer::WaitClientConnect()
         return FALSE;
     }
 
-    m_connectorMap.insert(std::make_pair(pClient->GetHandle(), pClient));
+    m_connectorMap.push_back(pClient);
 
     if(!m_iocp.AssociateDevice(pClient->GetHandle(), (ULONG_PTR)pClient))
         return FALSE;

@@ -26,11 +26,12 @@ public:
             return ;
 
         LPUSER_DATA_PACKAGE userRequest = (LPUSER_DATA_PACKAGE)lpBuf;
-		if (userRequest->dwPackageType==1)
-		{
-			_tsetlocale(LC_ALL, _T("chs"));
-			_tprintf_s(_T("%s"), userRequest->lpBuf);
-		}
+
+        if(userRequest->dwPackageType == 1)
+        {
+            _tsetlocale(LC_ALL, _T("chs"));
+            _tprintf_s(_T("%s"), userRequest->lpBuf);
+        }
     }
 };
 
@@ -114,7 +115,7 @@ int _tmain(int argc, _TCHAR* argv[])
     if(!pNamedPipeClient->Create(_T("NamedPipeServer")))
         return -1;
 
-//    SendThread(pNamedPipeClient);
+    SendThread(pNamedPipeClient);
 
     TestRequestAndReply(pNamedPipeClient);
 

@@ -1,6 +1,6 @@
 #pragma once
 #include <windows.h>
-#include <map>
+#include <vector>
 
 enum IPC_MESSAGE_TYPE
 {
@@ -55,7 +55,7 @@ struct pure_virtual IIPCConnectorIterator
     virtual IIPCConnector* GetCurrent() = 0;
 };
 
-typedef std::map<HANDLE, IIPCConnector*> ConnectorMap;
+typedef std::vector<IIPCConnector*> ConnectorMap;
 
 struct pure_virtual IIPCObject
 {

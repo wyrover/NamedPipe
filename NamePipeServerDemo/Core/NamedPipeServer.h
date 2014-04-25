@@ -3,6 +3,7 @@
 #include "IoCompletePort.h"
 #include "NamedPipeWrapper.h"
 
+class CNamedPipeConnector;
 class CNamedPipeServer: public IIPCObject, public IIPCConnectorIterator
 {
 public:
@@ -32,7 +33,11 @@ protected:
 
     DWORD GetCpuNum();
 
+    ConnectorMap::const_iterator FindClient(CNamedPipeConnector* pClient);
+
 private:
+
+    CRITICAL_SECTION m_csClientMap;
 
     CIOCompletionPort m_iocp;
 

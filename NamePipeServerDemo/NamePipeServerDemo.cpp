@@ -8,6 +8,18 @@
 #include "Core\NamedPipeServer.h"
 #include <locale.h>
 
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+#include <locale.h>
+
+#ifdef _DEBUG
+#ifndef DBG_NEW
+#define DBG_NEW new ( _NORMAL_BLOCK , __FILE__ , __LINE__ )
+#define new DBG_NEW
+#endif
+#endif
+
 BOOL g_bExit = FALSE;
 class CNamedPipeEvent : public IIPCEvent
 {
@@ -119,6 +131,8 @@ void TestRequestAndReply(IIPCObject* pNamedPipeClient)
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
     IIPCEvent* pEvent = new CNamedPipeEvent;
     IIPCObject* pNamedPipeServer = new CNamedPipeServer(pEvent);
 
@@ -128,7 +142,7 @@ int _tmain(int argc, _TCHAR* argv[])
     if(!pNamedPipeServer->Create(_T("NamedPipeServer")))
         return -1;
 
-    PostThread(pNamedPipeServer);
+//    PostThread(pNamedPipeServer);
 
     _getch();
 

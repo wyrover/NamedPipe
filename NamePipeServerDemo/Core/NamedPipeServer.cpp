@@ -99,22 +99,34 @@ ConnectorMap::const_iterator CNamedPipeServer::FindClient(CNamedPipeConnector* p
 
 void CNamedPipeServer::Begin()
 {
+    EnterCriticalSection(&m_csClientMap);
     m_citCurrent = m_connectorMap.begin();
+    LeaveCriticalSection(&m_csClientMap);
 }
 
 BOOL CNamedPipeServer::End()
 {
-    return m_citCurrent == m_connectorMap.end();
+    BOOL bEnd = FALSE;
+    EnterCriticalSection(&m_csClientMap);
+    bEnd = m_citCurrent == m_connectorMap.end();
+    LeaveCriticalSection(&m_csClientMap);
+    return bEnd;
 }
 
 void CNamedPipeServer::Next()
 {
+    EnterCriticalSection(&m_csClientMap);
     m_citCurrent++;
+    LeaveCriticalSection(&m_csClientMap);
 }
 
 IIPCConnector* CNamedPipeServer::GetCurrent()
 {
-    return *m_citCurrent;
+    IIPCConnector* pConnector = NULL;
+    EnterCriticalSection(&m_csClientMap);
+    pConnector = *m_citCurrent;
+    LeaveCriticalSection(&m_csClientMap);
+    return pConnector;
 }
 
 DWORD WINAPI CNamedPipeServer::IOCompletionThread(LPVOID lpParam)
@@ -141,11 +153,13 @@ DWORD WINAPI CNamedPipeServer::IOCompletionThread(LPVOID lpParam)
         }
         else if(!bSucess && GetLastError() == ERROR_BROKEN_PIPE)
         {
+            EnterCriticalSection(&pThis->m_csClientMap);
             ConnectorMap::const_iterator cit = pThis->FindClient(pClient);
 
             if(cit != pThis->m_connectorMap.end())
                 pThis->m_connectorMap.erase(cit);
 
+            LeaveCriticalSection(&pThis->m_csClientMap);
             pClient->ClearOverlapped(po);
             pClient->Close();
             delete pClient;
@@ -162,8 +176,7 @@ DWORD WINAPI CNamedPipeServer::IOCompletionThread(LPVOID lpParam)
         {
             case IPC_MESSAGE_CLIENTCONNECT:
                 pClient->DoRead();
-                pThis->WaitClientConnect();     // 第二次等待客户端连接时,会new一个CLIENTCONNECT类型的OVERLAPPED,如果没有客户端连接,直接退出程序的话,会有内存泄露的BUG
-                pClient->ClearOverlapped(po);
+                pThis->WaitClientConnect();
                 break;
 
             case IPC_MESSAGE_READ:
@@ -213,14 +226,14 @@ DWORD CNamedPipeServer::GetCpuNum()
     return sysInfo.dwNumberOfProcessors;
 }
 
-CNamedPipeConnector::CNamedPipeConnector(): m_bExit(FALSE)
+CNamedPipeConnector::CNamedPipeConnector(): m_bExit(FALSE), m_conn(NULL)
 {
 
 }
 
 CNamedPipeConnector::~CNamedPipeConnector()
 {
-
+    ClearOverlapped(m_conn);
 }
 
 DWORD CNamedPipeConnector::GetSID()
@@ -314,21 +327,21 @@ BOOL CNamedPipeConnector::DoRead()
 
 BOOL CNamedPipeConnector::WaitConnect()
 {
-    LPIPC_DATA_OVERLAPPEDEX package = new IPC_DATA_OVERLAPPEDEX;
-    ZeroMemory(package, sizeof(IPC_DATA_OVERLAPPEDEX));
-    package->hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    package->emMessageType = IPC_MESSAGE_CLIENTCONNECT;
-    BOOL bSucess = m_pipe.ConnectNamedPipe(package);
+    m_conn = new IPC_DATA_OVERLAPPEDEX;
+    ZeroMemory(m_conn, sizeof(IPC_DATA_OVERLAPPEDEX));
+    m_conn->hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+    m_conn->emMessageType = IPC_MESSAGE_CLIENTCONNECT;
+    BOOL bSucess = m_pipe.ConnectNamedPipe(m_conn);
     return (bSucess || GetLastError() == ERROR_IO_PENDING);
 }
 
-void CNamedPipeConnector::ClearOverlapped(LPOVERLAPPED lpo)
+void CNamedPipeConnector::ClearOverlapped(LPIPC_DATA_OVERLAPPEDEX dataOverlapped)
 {
-    if(NULL != lpo)
+    if(NULL != dataOverlapped)
     {
-        CloseHandle(lpo->hEvent);
-        lpo->hEvent = NULL;
-        delete lpo;
-        lpo = NULL;
+        CloseHandle(dataOverlapped->hEvent);
+        dataOverlapped->hEvent = NULL;
+        delete dataOverlapped;
+        dataOverlapped = NULL;
     }
 }

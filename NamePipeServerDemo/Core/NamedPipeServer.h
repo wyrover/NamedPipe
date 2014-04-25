@@ -83,7 +83,7 @@ public:
 
 protected:
 
-    void ClearOverlapped(LPOVERLAPPED lpo);
+    void ClearOverlapped(LPIPC_DATA_OVERLAPPEDEX dataOverlapped);
 
 private:
     CNamedPipeWrapper m_pipe;
@@ -91,4 +91,6 @@ private:
     BOOL m_bExit;
 
     DWORD m_dwProcessID;
+
+	LPIPC_DATA_OVERLAPPEDEX m_conn;
 };

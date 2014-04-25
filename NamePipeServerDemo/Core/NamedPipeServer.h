@@ -92,5 +92,5 @@ private:
 
     DWORD m_dwProcessID;
 
-	LPIPC_DATA_OVERLAPPEDEX m_conn;
+    LPIPC_DATA_OVERLAPPEDEX m_conn;
 };

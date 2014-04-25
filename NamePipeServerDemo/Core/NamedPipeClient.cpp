@@ -129,7 +129,6 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
     LPIPC_DATA_OVERLAPPEDEX sendPackage = new IPC_DATA_OVERLAPPEDEX;
     ZeroMemory(sendPackage, sizeof(IPC_DATA_OVERLAPPEDEX));
     sendPackage->hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-    sendPackage->emMessageType = IPC_MESSAGE_READ;
     sendPackage->ipcDataPackage.dwDataSize = dwSendBufSize;
     sendPackage->ipcDataPackage.dwProcessID = GetCurrentProcessId();
     sendPackage->ipcDataPackage.dwTotalSize = sizeof(IPC_DATA_PACKAGE) - SYELOG_MAXIMUM_MESSAGE * sizeof(TCHAR) + dwSendBufSize;
@@ -140,11 +139,24 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
     ZeroMemory(&recePackage, sizeof(IPC_DATA_PACKAGE));
 
     DWORD dwWrited = 0;
-    BOOL bSucess = m_pipe.TransactNamedPipe(&sendPackage->ipcDataPackage, sendPackage->ipcDataPackage.dwTotalSize, &recePackage.ipcDataPackage, sizeof(IPC_DATA_PACKAGE), &dwWrited, sendPackage);
+    BOOL bSucess = m_pipe.WriteFile(&sendPackage->ipcDataPackage, sendPackage->ipcDataPackage.dwTotalSize, &dwWrited, sendPackage);
 
-    if(GetLastError() == ERROR_IO_PENDING)
+    if(!bSucess && GetLastError() == ERROR_IO_PENDING)
     {
         if(GetOverlappedResult(m_pipe.GetHandle(), sendPackage, dwTransactSize, TRUE))
+            bSucess = TRUE;
+    }
+
+    LPIPC_DATA_OVERLAPPEDEX recvPackage = new IPC_DATA_OVERLAPPEDEX;
+    ZeroMemory(recvPackage, sizeof(IPC_DATA_OVERLAPPEDEX));
+    recvPackage->hEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
+
+    DWORD dwReaded = 0;
+    bSucess = m_pipe.ReadFile(&recePackage.ipcDataPackage, sizeof(IPC_DATA_PACKAGE), &dwReaded, recvPackage);
+
+    if(!bSucess && GetLastError() == ERROR_IO_PENDING)
+    {
+        if(GetOverlappedResult(m_pipe.GetHandle(), recvPackage, dwTransactSize, TRUE))
             bSucess = TRUE;
     }
 
@@ -156,6 +168,7 @@ BOOL CNamedPipeClient::RequestAndReply(LPVOID lpSendBuf, DWORD dwSendBufSize, LP
 
     return bSucess;
 }
+
 
 DWORD CNamedPipeClient::GetSID()
 {
@@ -210,6 +223,10 @@ DWORD CNamedPipeClient::IOCompletionThread(LPVOID lpParam)
 
             case IPC_MESSAGE_WRITE:
                 pClient->DoRead();
+                pClient->ClearOverlapped(po);
+                break;
+
+            default:
                 pClient->ClearOverlapped(po);
                 break;
         }
